@@ -8,7 +8,9 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [main]
+    # main is the release branch; the MVP development branch also deploys so the
+    # game is playable before it is merged.
+    branches: [main, claude/planet-x-mvp-1f1t2m]
   workflow_dispatch:
 
 permissions:

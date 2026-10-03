@@ -90,7 +90,8 @@ Read [GAME_DESIGN.md](GAME_DESIGN.md), [ARCHITECTURE.md](ARCHITECTURE.md), [ROAD
 
 ## Deployment
 
-`.github/workflows/deploy.yml` runs on every push to `main`: install → typecheck → unit tests → build
+`.github/workflows/deploy.yml` runs on every push to `main` (and to the MVP development branch
+`claude/planet-x-mvp-1f1t2m`): install → typecheck → unit tests → build
 (base path `/<repo>/` derived from `GITHUB_REPOSITORY`) → publish `dist/` to the `gh-pages` branch.
 
 **One-time setting:** repository *Settings → Pages → Build and deployment → Source: Deploy from a branch →
