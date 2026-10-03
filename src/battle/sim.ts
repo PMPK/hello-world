@@ -46,6 +46,14 @@ export function isActive(u: BUnit): boolean {
   return u.alive && !u.retreated && !u.reserve;
 }
 
+/** True when the unit cannot fire any of its weapons for lack of ammunition. */
+export function outOfAmmo(u: BUnit): boolean {
+  if (!u.stats.weapons.length) return false;
+  let min = Infinity;
+  for (const w of u.stats.weapons) min = Math.min(min, w.ammoPerShot);
+  return u.ammo < min;
+}
+
 /** Penetration vs armour → damage multiplier. */
 export function penetrationFactor(pen: number, armor: number): number {
   if (armor <= 0 || pen >= armor) return 1;

@@ -123,10 +123,27 @@ export class BattleView {
     this.scene.add(this.selRings);
 
     this.syncBuildings();
-    // look from behind our deployment toward the enemy
+    // look from behind our deployed force toward the enemy, with the force
+    // slightly below the screen centre (clear of the command bar on phones)
     const e = sim.setup.sides[this.playerSide].entry;
+    let cx = 0;
+    let cz = 0;
+    let n = 0;
+    for (const u of sim.units) {
+      if (u.side !== this.playerSide || !u.alive || u.reserve) continue;
+      cx += u.x;
+      cz += u.z;
+      n++;
+    }
+    if (n) {
+      cx /= n;
+      cz /= n;
+    } else {
+      cx = e.x;
+      cz = e.z;
+    }
     this.rig.setYaw(Math.atan2(-e.dirX, -e.dirZ));
-    this.rig.jumpTo(e.x + e.dirX * 70, e.z + e.dirZ * 70, 250);
+    this.rig.jumpTo(cx + e.dirX * 25, cz + e.dirZ * 25, 230);
   }
 
   // ---------------------------------------------------------------------------

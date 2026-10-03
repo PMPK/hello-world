@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { BattleSim, isActive } from '../battle/sim';
+import { BattleSim, isActive, outOfAmmo } from '../battle/sim';
 import { bHeight } from '../battle/terrain';
 import type { BattleResult, BattleSetup, BUnit, SideIndex } from '../battle/types';
 import type { Terrain } from '../world/terrain';
@@ -23,6 +23,8 @@ export class BattleMode implements Mode, BattleController {
   selected = new Set<number>();
   boxMode = false;
   attackMoveMode = false;
+  /** Camera tracks the selection until the player pans manually. */
+  follow = false;
   private box: { x0: number; y0: number; x1: number; y1: number } | null = null;
   private hudTimer = 0;
   private finishedShown = false;
@@ -56,7 +58,10 @@ export class BattleMode implements Mode, BattleController {
           return;
         }
         if (info.pointerType === 'mouse' && info.button === 1) this.view.rig.rotateBy(dx * 0.006);
-        else this.view.rig.panPixels(dx, dy, this.app.gr.height);
+        else {
+          this.view.rig.panPixels(dx, dy, this.app.gr.height);
+          this.follow = false;
+        }
       },
       onDragEnd: (_x, _y, info, claimed) => {
         if (claimed && this.box) {
@@ -96,6 +101,11 @@ export class BattleMode implements Mode, BattleController {
     for (const id of [...this.selected]) {
       const u = this.sim.unitById(id);
       if (!u || !isActive(u)) this.selected.delete(id);
+    }
+    if (this.follow) {
+      const c = this.selectionCentre();
+      if (c) this.view.rig.focus(c.x, c.z);
+      else this.follow = false;
     }
     this.hudTimer -= dt;
     if (this.hudTimer <= 0) {
@@ -215,7 +225,7 @@ export class BattleMode implements Mode, BattleController {
           if (t) o.line(here.x, here.y, t.x, t.y, 'rgba(255,106,77,0.6)', [3, 4], 1.2);
         }
       }
-      if (u.task === 'no ammo' && friendly) o.label(p.x, p.y - 22, 'NO AMMO', '#e2583f', 9);
+      if (friendly && outOfAmmo(u)) o.label(p.x, p.y - 22, 'NO AMMO', '#e2583f', 9);
       else if (friendly && u.stats.fuelCapacity > 0 && u.fuel <= 0) o.label(p.x, p.y - 22, 'NO FUEL', '#e8c33c', 9);
     }
     // enemy structures marker for targeting
@@ -250,7 +260,10 @@ export class BattleMode implements Mode, BattleController {
     if (k.isDown('ArrowUp') || k.isDown('KeyW')) f += sp;
     if (k.isDown('ArrowDown')) f -= sp;
     if (k.isDown('KeyD')) r += sp;
-    if (r || f) this.view.rig.panWorld(r, f);
+    if (r || f) {
+      this.view.rig.panWorld(r, f);
+      this.follow = false;
+    }
     if (k.isDown('KeyQ')) this.view.rig.rotateBy(-1.6 * dt);
     if (k.isDown('KeyE')) this.view.rig.rotateBy(1.6 * dt);
     if (k.isDown('KeyR') || k.isDown('Equal')) this.view.rig.zoomBy(Math.exp(-1.8 * dt));
@@ -271,11 +284,11 @@ export class BattleMode implements Mode, BattleController {
     else if (e.code === 'KeyS') this.stop();
     else if (e.code === 'KeyX') this.retreatSelected();
     else if (e.code === 'KeyC') this.focusSelection();
+    else if (e.code === 'KeyV') this.toggleFollow();
     else if (e.code === 'Escape') {
-      this.selected.clear();
       this.boxMode = false;
       this.attackMoveMode = false;
-      this.syncSelection();
+      this.clearSelection();
     } else if (e.code === 'Digit1') this.setSpeed(1);
     else if (e.code === 'Digit2') this.setSpeed(2);
   }
@@ -334,8 +347,7 @@ export class BattleMode implements Mode, BattleController {
     if (!this.selected.size) return;
     if (info.pointerType === 'mouse' && info.button === 0 && !this.attackMoveMode) {
       // RTS mouse convention: left-click on empty ground deselects, right-click moves
-      this.selected.clear();
-      this.syncSelection();
+      this.clearSelection();
       return;
     }
     this.issueMove(pick.x, pick.z, this.attackMoveMode);
@@ -427,20 +439,48 @@ export class BattleMode implements Mode, BattleController {
     this.sim.secure(this.playerSide);
   }
 
-  focusSelection(): void {
-    const list = [...this.selected].map((id) => this.sim.unitById(id)).filter((u): u is BUnit => !!u && u.alive);
-    const src = list.length ? list : this.sim.units.filter((u) => this.mine(u));
-    if (!src.length) return;
+  private centreOf(list: BUnit[]): { x: number; z: number } | null {
+    if (!list.length) return null;
     let x = 0;
     let z = 0;
-    for (const u of src) {
+    for (const u of list) {
       x += u.x;
       z += u.z;
     }
-    this.view.rig.focus(x / src.length, z / src.length);
+    return { x: x / list.length, z: z / list.length };
+  }
+
+  private selectionCentre(): { x: number; z: number } | null {
+    return this.centreOf([...this.selected].map((id) => this.sim.unitById(id)).filter((u): u is BUnit => !!u && isActive(u)));
+  }
+
+  focusSelection(): void {
+    const c = this.selectionCentre() ?? this.centreOf(this.sim.units.filter((u) => this.mine(u)));
+    if (c) this.view.rig.focus(c.x, c.z);
+  }
+
+  selectOnly(id: number): void {
+    const u = this.sim.unitById(id);
+    if (!this.mine(u)) return;
+    this.selected.clear();
+    this.selected.add(id);
+    this.syncSelection();
+  }
+
+  clearSelection(): void {
+    this.selected.clear();
+    this.follow = false;
+    this.syncSelection();
+  }
+
+  toggleFollow(): void {
+    this.follow = !this.follow && this.selected.size > 0;
+    if (this.follow) this.focusSelection();
+    this.hud.update();
   }
 
   jumpCamera(x: number, z: number): void {
+    this.follow = false;
     this.view.rig.focus(x, z);
   }
 

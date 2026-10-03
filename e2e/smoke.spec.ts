@@ -111,6 +111,15 @@ test('full loop: campaign → move army → tactical battle → back to campaign
   await page.getByTestId('cmd-all').click();
   const selCount = await px(page, (p) => p.app.battle.selected.size);
   expect(selCount).toBeGreaterThan(0);
+  // unit card: multi-selection grid → single unit details → clear → select all again
+  await expect(page.getByTestId('unit-card')).toBeVisible();
+  await page.locator('.uc-badge').first().click();
+  expect(await px(page, (p) => p.app.battle.selected.size)).toBe(1);
+  await expect(page.locator('.uc-weapon').first()).toBeVisible();
+  await page.getByTestId('unit-deselect').click();
+  await expect(page.getByTestId('unit-card')).toBeHidden();
+  expect(await px(page, (p) => p.app.battle.selected.size)).toBe(0);
+  await page.getByTestId('cmd-all').click();
   await command(page, vp.width * 0.45, vp.height * 0.35, touch);
   await page.waitForTimeout(300);
   const moving = await px(page, (p) => p.battle().units.some((u: any) => u.side === p.app.battle.playerSide && u.order.type === 'move'));

@@ -907,6 +907,179 @@ body {
   align-items: center;
   pointer-events: none !important;
 }
+.btn.ghost {
+  border-color: transparent;
+  background: transparent;
+}
+.btn.ghost.active {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+.unitcard {
+  position: absolute;
+  left: calc(6px + var(--sal));
+  top: calc(60px + var(--sat));
+  width: 210px;
+  padding: 4px 6px 8px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  max-height: calc(100% - 230px - var(--sat) - var(--sab));
+  overflow: hidden;
+}
+.uc-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.uc-icon {
+  flex: none;
+  width: 28px;
+  height: 19px;
+  color: var(--friend);
+}
+.uc-icon svg {
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+}
+.uc-title {
+  flex: 1;
+  min-width: 0;
+  padding-left: 2px;
+}
+.uc-name {
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.uc-sub {
+  font-size: 10px;
+  color: var(--muted);
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.uc-head .btn {
+  flex: none;
+  min-width: 42px;
+  min-height: 42px;
+  padding: 0;
+}
+.uc-head .btn svg {
+  width: 18px;
+  height: 18px;
+}
+.uc-line {
+  color: var(--muted);
+  font-size: 11px;
+}
+.uc-row {
+  display: grid;
+  grid-template-columns: 36px 1fr 62px;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+}
+.uc-lbl {
+  color: var(--muted);
+  letter-spacing: 0.08em;
+}
+.uc-val {
+  text-align: right;
+}
+.uc-weapons {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 11px;
+  border-top: 1px solid var(--line);
+  padding-top: 4px;
+  margin-top: 2px;
+}
+.uc-weapon {
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+}
+.uc-weapon span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.uc-order {
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.uc-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.uc-flags:empty {
+  display: none;
+}
+.uc-flags .chip {
+  font-size: 10px;
+  padding: 1px 5px;
+}
+.chip.ok {
+  border-color: rgba(111, 208, 140, 0.45);
+  color: var(--ok);
+}
+.chip.warn {
+  border-color: rgba(232, 195, 60, 0.45);
+  color: var(--warn);
+}
+.chip.bad {
+  border-color: rgba(226, 88, 63, 0.55);
+  color: var(--danger);
+}
+.uc-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+}
+.uc-badge {
+  appearance: none;
+  min-height: 42px;
+  border: 1px solid var(--line-strong);
+  border-radius: 3px;
+  background: rgba(95, 180, 255, 0.08);
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  gap: 5px;
+  padding: 3px 4px;
+  font: 600 10px var(--mono);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.uc-badge:active {
+  background: rgba(95, 180, 255, 0.2);
+}
+.uc-badge-t {
+  text-align: center;
+}
+.uc-badge.dry {
+  border-color: rgba(226, 88, 63, 0.75);
+}
+.uc-badge.hit {
+  box-shadow: inset 0 0 0 1px rgba(255, 106, 77, 0.7);
+}
+.uc-more {
+  font-size: 11px;
+  text-align: center;
+}
 .minimap {
   position: absolute;
   left: calc(6px + var(--sal));
@@ -1007,6 +1180,11 @@ body {
   .minimap {
     width: 120px;
     height: 120px;
+  }
+  .unitcard {
+    top: calc(54px + var(--sat));
+    width: 196px;
+    max-height: calc(100% - 192px - var(--sat) - var(--sab));
   }
   .cmdbar .btn {
     min-height: 48px;
