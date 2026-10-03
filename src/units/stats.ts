@@ -95,10 +95,11 @@ export function computeStats(design: UnitDesign): UnitStats {
   const spotting = Math.min(1, sensors.reduce((a, s) => Math.max(a, s.spotting), 0));
   const accuracyBonus = elec.reduce((a, e) => a + e.accuracyBonus, 0);
 
-  // Combat power heuristic: survivability x damage output.
+  // Combat power heuristic (AI estimates): sqrt(damage output x survivability).
+  // Calibrated against headless battle results: tank ~4-5 squads, jeep ~1 squad.
   let dps = 0;
-  for (const w of weapons) dps += w.damage * w.rof * w.accuracy * (w.antiVehicleOnly ? 0.6 : 1) * (1 + w.penetration / 400);
-  const survivability = maxHp * (1 + (arm?.armor ?? 0) / 180);
+  for (const w of weapons) dps += w.damage * w.rof * w.accuracy * (w.antiVehicleOnly ? 0.6 : 1);
+  const survivability = maxHp * (1 + (arm?.armor ?? 0) / 1500);
   const power = Math.round(Math.sqrt(dps * survivability) * 10) / 10;
 
   return {

@@ -294,13 +294,48 @@ function enemyTargets(state: CampaignState, factionId: string): TargetOption[] {
   return out;
 }
 
-function pickTarget(state: CampaignState, factionId: string, x: number, z: number, strength: number, caution: number): TargetOption | null {
+/** How far (map units) a force can still drive before its vehicles run dry. */
+export function fuelRange(units: { designId: string; fuel: number }[]): number {
+  let r = Infinity;
+  for (const u of units) {
+    const st = statsOf(u.designId);
+    if (st.fuelPerUnit > 0) r = Math.min(r, u.fuel / st.fuelPerUnit);
+  }
+  return r;
+}
+
+/** Fit to keep fighting: enough fuel, ammunition and health. */
+function armyReady(a: Army): boolean {
+  let ammo = 0;
+  let ammoCap = 0;
+  let hp = 0;
+  let hpCap = 0;
+  for (const u of a.units) {
+    const st = statsOf(u.designId);
+    ammo += u.ammo;
+    ammoCap += st.ammoCapacity;
+    hp += u.hp;
+    hpCap += st.maxHp;
+  }
+  return fuelRange(a.units) > 45 && ammo >= ammoCap * 0.45 && hp >= hpCap * 0.5;
+}
+
+function pickTarget(
+  state: CampaignState,
+  factionId: string,
+  x: number,
+  z: number,
+  strength: number,
+  caution: number,
+  range = Infinity,
+): TargetOption | null {
   let best: TargetOption | null = null;
   let bestScore = -Infinity;
   for (const t of enemyTargets(state, factionId)) {
     const needed = t.defense * (1.25 + caution * 0.9) + 40;
     if (strength < needed) continue;
     const d = dist(x, z, t.x, t.z);
+    if (d * 1.15 + 10 > range) continue; // cannot get there (and fight) on the fuel we carry
     const score = t.value * 30 - d * 0.6 - t.defense * 0.05;
     if (score > bestScore) {
       bestScore = score;
@@ -328,7 +363,7 @@ function thinkMilitary(ctx: SimContext, ai: AIState): void {
       const st = statsOf(u.designId);
       return st.ammoCapacity > 0 && u.ammo < st.ammoCapacity * 0.25;
     });
-    const weak = army.units.length <= 1 || s < 90 || lowAmmo;
+    const weak = army.units.length <= 1 || s < 90 || lowAmmo || !armyReady(army);
     if (army.order.type === 'idle' || weak) {
       if (weak || !hostile) {
         if (bases.length) orderReturn(ctx, army.id);
@@ -374,7 +409,7 @@ function thinkMilitary(ctx: SimContext, ai: AIState): void {
   const strikeUnits = home.garrison.filter((u) => !guardIds.has(u.id));
   if (strikeUnits.length < 2) return;
   const strike = strengthOf(strikeUnits);
-  const target = pickTarget(state, fid, home.x, home.z, strike, caution);
+  const target = pickTarget(state, fid, home.x, home.z, strike, caution, fuelRange(strikeUnits));
   if (!target) return;
   if (target.target.kind !== 'building' && strikeUnits.length < 5) return;
   const army = formArmyFromGarrison(ctx, home.id, strikeUnits.map((u) => u.id));
@@ -391,7 +426,8 @@ function thinkMilitary(ctx: SimContext, ai: AIState): void {
 
 function retarget(ctx: SimContext, army: Army, strength: number, caution: number): boolean {
   const { state } = ctx;
-  const t = pickTarget(state, army.factionId, army.x, army.z, strength, caution);
+  if (!armyReady(army)) return false;
+  const t = pickTarget(state, army.factionId, army.x, army.z, strength, caution, fuelRange(army.units));
   if (!t) return false;
   if (dist(army.x, army.z, t.x, t.z) > 90) return false;
   return orderAttack(ctx, army.id, t.target);

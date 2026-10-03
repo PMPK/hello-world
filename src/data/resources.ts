@@ -36,7 +36,7 @@ export const RESOURCES: Record<ResourceId, ResourceDef> = {
   minerals: {
     id: 'minerals',
     name: 'Minerals',
-    short: 'MIN',
+    short: 'ORE',
     category: 'raw',
     color: '#9aa7b0',
     description: 'Raw ore hauled from mining outposts. Smelted into refined materials.',

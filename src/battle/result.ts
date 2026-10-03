@@ -1,6 +1,6 @@
 import { dist } from '../core/math';
 import { BUILDINGS, buildingDisplayName } from '../data/buildings';
-import { createArmy, removeArmy, retreatArmy } from '../campaign/armies';
+import { createArmy, orderReturn, removeArmy, retreatArmy } from '../campaign/armies';
 import { log, type SimContext } from '../campaign/context';
 import { declareHostile } from '../campaign/diplomacy';
 import { captureOutpost } from '../campaign/encounters';
@@ -156,6 +156,10 @@ export function applyBattleResult(ctx: SimContext, setup: BattleSetup, result: B
     const draw = winnerF === null;
     if (isLoser || (draw && a.factionId === atkF)) {
       retreatArmy(ctx, a, setup.campaignX, setup.campaignZ, setup.kind === 'base_assault' ? 16 : 10);
+      // AI commanders pull beaten forces back home to refit instead of retrying at once
+      if (!state.factions[a.factionId]?.isPlayer) {
+        orderReturn(ctx, a.id);
+      }
     } else {
       a.path = [];
       a.order = { type: 'idle' };
@@ -183,8 +187,9 @@ export function applyBattleResult(ctx: SimContext, setup: BattleSetup, result: B
     lines.push(`Ammunition expended: ${Math.round(me.ammoSpent)} · Fuel burned: ${Math.round(me.fuelSpent)}`);
   }
   lines.push(`Battle duration: ${formatDuration(result.campaignHours)}`);
+  const wasStanding = new Set(setup.buildings.filter((b) => b.state !== 'destroyed').map((b) => b.campaignId));
   const destroyedNames = result.buildings
-    .filter((rb) => rb.destroyed)
+    .filter((rb) => rb.destroyed && wasStanding.has(rb.campaignId))
     .map((rb) => state.buildings[rb.campaignId])
     .filter((b) => !!b)
     .map((b) => buildingDisplayName(b.typeId, b.siteId ? state.sites[b.siteId]?.kind : undefined));

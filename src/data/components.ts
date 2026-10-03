@@ -197,7 +197,7 @@ export const ENGINES: Record<string, EngineDef> = {
     cost: { refined: 8, components: 6 },
     buildHours: 6,
     fuelPerMetre: 0.0045,
-    fuelPerUnit: 0.28,
+    fuelPerUnit: 0.2,
   },
 };
 

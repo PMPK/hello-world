@@ -1,0 +1,54 @@
+name: Deploy to GitHub Pages
+
+# Every push to main builds the game and publishes it to the `gh-pages`
+# branch. GitHub Pages serves that branch at
+#   https://<owner>.github.io/<repo>/
+# One-time setup: Settings → Pages → Build and deployment →
+#   Source: "Deploy from a branch", Branch: gh-pages / (root) → Save.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pages-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      # vite.config.ts derives the base path (/<repo>/) from GITHUB_REPOSITORY
+      - run: npm run build
+      - name: Publish dist/ to the gh-pages branch
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd dist
+          touch .nojekyll
+          git init -q
+          git checkout -q -b gh-pages
+          git add -A
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -q -m "Deploy ${GITHUB_SHA::7}"
+          git push -q -f "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages
+      - name: Summary
+        run: |
+          OWNER=$(echo "${GITHUB_REPOSITORY%%/*}" | tr '[:upper:]' '[:lower:]')
+          REPO="${GITHUB_REPOSITORY##*/}"
+          echo "### Deployed to gh-pages" >> "$GITHUB_STEP_SUMMARY"
+          echo "URL: https://${OWNER}.github.io/${REPO}/" >> "$GITHUB_STEP_SUMMARY"
+          echo "(If this is the first deploy: Settings → Pages → Source: Deploy from a branch → gh-pages / root.)" >> "$GITHUB_STEP_SUMMARY"

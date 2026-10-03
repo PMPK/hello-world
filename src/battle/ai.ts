@@ -53,6 +53,8 @@ export class TacticalAI {
   private mode: 'attack' | 'defend';
   private holdSince = -1;
   private contactAt = -1;
+  private lastContact = -999;
+  private readonly siegeAttacker: boolean;
 
   constructor(sim: BattleSim, side: SideIndex) {
     this.sim = sim;
@@ -61,6 +63,7 @@ export class TacticalAI {
     const siege = sim.setup.kind !== 'field';
     // Field battles are meeting engagements: both sides manoeuvre. Siege defenders hold their base.
     this.mode = side === 0 || !siege ? 'attack' : 'defend';
+    this.siegeAttacker = siege && side === 0;
   }
 
   get enemySide(): SideIndex {
@@ -97,6 +100,7 @@ export class TacticalAI {
     }
 
     if (known.length && this.contactAt < 0) this.contactAt = sim.time;
+    if (sim.units.some((e) => e.side !== this.side && isActive(e) && e.seenBy[this.side])) this.lastContact = sim.time;
 
     // ---- Defender may counter-attack when clearly superior ----------------
     if (this.mode === 'defend' && known.length && ownPower > enemyPower * 1.7 && sim.time > 40) this.mode = 'attack';
@@ -288,8 +292,8 @@ export class TacticalAI {
         const lateral = (k - (tanks.length - 1) / 2) * 40;
         this.moveTo(u, ownC.x + ux * (bound - 30) + px * lateral, ownC.z + uz * (bound - 30) + pz * lateral, true, 35);
       });
-      // When the objective is buildings and nobody defends them, go for them.
-      if (enemyBuildings.length && axL < 260) this.assaultBuildings(own, enemyBuildings);
+      // When the objective is a base and nobody defends it, sweep it.
+      if (this.siegeAttacker && enemyBuildings.length && axL < 260 && sim.time - this.lastContact > 25) this.assaultBuildings(own, enemyBuildings);
       return;
     }
 
@@ -333,9 +337,7 @@ export class TacticalAI {
       else this.jeepHarass(u, ownC, ux, uz);
     }
 
-    // with no defenders left near the objective, demolish key structures
-    const defendersNearBase = known.length === 0;
-    if (defendersNearBase && enemyBuildings.length) this.assaultBuildings(own, enemyBuildings);
+
   }
 
   private pickFlankSide(c: { x: number; z: number }, px: number, pz: number): number {

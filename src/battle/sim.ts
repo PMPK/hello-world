@@ -79,7 +79,9 @@ export class BattleSim {
   /** When true (no defenders in a siege), the attacker may end the battle at will. */
   readonly undefended: boolean;
 
-  constructor(setup: BattleSetup, strategic: Terrain, opts: BattleOptions) {
+  constructor(setupIn: BattleSetup, strategic: Terrain, opts: BattleOptions) {
+    // private copy: deployment points may be adjusted to the terrain
+    const setup: BattleSetup = JSON.parse(JSON.stringify(setupIn));
     this.setup = setup;
     this.rng = new Rng(mixSeed(setup.seed, 'battle-sim'));
     this.terrain = createBattleTerrain(strategic, setup.campaignX, setup.campaignZ, setup.seed, setup.buildings);
@@ -112,6 +114,7 @@ export class BattleSim {
         destroyed: b.state === 'destroyed' || b.hp <= 0,
       });
     }
+    for (const side of [0, 1] as SideIndex[]) this.adjustEntry(side);
     for (const side of [0, 1] as SideIndex[]) this.deploySide(side);
     for (const side of [0, 1] as SideIndex[]) {
       this.startPower[side] = this.sidePower(side, true);
@@ -124,6 +127,38 @@ export class BattleSim {
   // ---------------------------------------------------------------------------
   // Deployment
   // ---------------------------------------------------------------------------
+
+  /** Move a deployment point inland until there is enough open ground around it. */
+  private adjustEntry(side: SideIndex): void {
+    const e = this.setup.sides[side].entry;
+    const t = this.terrain;
+    const siegeDefender = side === 1 && (this.setup.kind === 'base_assault' || this.setup.kind === 'outpost');
+    if (siegeDefender) return;
+    const openFrac = (x: number, z: number): number => {
+      let ok = 0;
+      let n = 0;
+      for (let k = 0; k < 16; k++) {
+        const a = (k / 16) * Math.PI * 2;
+        for (const r of [25, 55]) {
+          n++;
+          if (!bBlocked(t, x + Math.cos(a) * r, z + Math.sin(a) * r)) ok++;
+        }
+      }
+      return ok / n;
+    };
+    const cx = t.size / 2;
+    const cz = t.size / 2;
+    let x = e.x;
+    let z = e.z;
+    for (let step = 0; step < 14 && openFrac(x, z) < 0.75; step++) {
+      // slide toward the centre line of the battle
+      x += (cx - x) * 0.15;
+      z += (cz - z) * 0.15;
+    }
+    const p = this.freeSpot(x, z);
+    e.x = p.x;
+    e.z = p.z;
+  }
 
   private makeUnit(side: SideIndex, specIndex: number): BUnit {
     const spec = this.setup.sides[side].units[specIndex];
@@ -530,14 +565,22 @@ export class BattleSim {
       }
     } else if (o.type === 'retreat') {
       const s = this.terrain.size;
-      if (u.x < EXIT_MARGIN || u.z < EXIT_MARGIN || u.x > s - EXIT_MARGIN || u.z > s - EXIT_MARGIN) {
+      const exit = this.exitPoint(u.side, u.x, u.z);
+      const nearEdge = u.x < EXIT_MARGIN || u.z < EXIT_MARGIN || u.x > s - EXIT_MARGIN || u.z > s - EXIT_MARGIN;
+      // leave the field at the map edge, or at the reachable exit point when terrain blocks the edge
+      if (nearEdge || dist(u.x, u.z, exit.x, exit.z) < 14) {
         u.retreated = true;
         u.path = [];
         return;
       }
       if (u.path.length === 0) {
-        const exit = this.exitPoint(u.side, u.x, u.z);
         this.planPath(u, exit.x, exit.z);
+        if (u.path.length === 0 && u.stats.fuelCapacity > 0 && u.fuel <= 0) {
+          // immobilised vehicles are abandoned; the crew slips away
+          this.damageUnit(u, u.hp + 1, null);
+        } else if (u.path.length === 0) {
+          u.retreated = true;
+        }
       }
     }
   }
@@ -1026,8 +1069,24 @@ export class BattleSim {
       const anyRetreat = this.units.some((u) => u.side === 1 && u.retreated);
       this.finish(0, anyRetreat ? 'retreat' : 'eliminated');
     } else if (this.time >= this.setup.timeLimit) {
-      this.finish(this.setup.kind === 'field' ? null : 1, 'timeout');
+      if (this.setup.kind === 'field') {
+        this.finish(null, 'timeout');
+        return;
+      }
+      // Siege at nightfall: whoever holds the objective area keeps it.
+      const objective = this.objectivePoint();
+      const near = (side: SideIndex): number =>
+        this.units.filter((u) => u.side === side && u.alive && !u.retreated && !u.reserve && dist(u.x, u.z, objective.x, objective.z) < 170).length;
+      this.finish(near(0) > 0 && near(1) === 0 ? 0 : 1, 'timeout');
     }
+  }
+
+  /** Centre of the fought-over objective (base centre / outpost / map centre). */
+  objectivePoint(): { x: number; z: number } {
+    const id = this.setup.objectiveBuildingId;
+    const ob = id ? this.buildings.find((b) => b.spec.campaignId === id) : undefined;
+    if (ob) return { x: ob.x, z: ob.z };
+    return { x: this.terrain.size / 2, z: this.terrain.size / 2 };
   }
 
   /** True when the side has no enemies left that could fight (player may end battle). */
