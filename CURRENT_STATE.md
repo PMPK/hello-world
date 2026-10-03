@@ -52,7 +52,7 @@
 
 - Strategic AI has full knowledge of the map (no fog of war for the AI).
 - Field armies cannot resupply away from a base (no supply trucks yet); tanks on long marches can run dry —
-  this is intended logistics pressure but there is no UI warning before fuel runs out (only bars in the army panel).
+  intended logistics pressure. The army panel shows fuel range and the map flags LOW FUEL / LOW AMMO.
 - Battle unit separation is simple; large groups can jostle around obstacles. Paths are re-planned when blocked.
 - Infantry squads are drawn as up to 6 figures; there are no death animations (squads shrink).
 - Buildings block movement as circles; no garrisoning of infantry inside buildings.
@@ -73,7 +73,7 @@
 
 ## Best next tasks
 
-1. Supply trucks / field resupply and a low-fuel warning on the strategic map.
+1. Supply trucks / field resupply (fuel range is already shown; no way to refuel in the field yet).
 2. Defensive structures (bunker, AT gun) that fight in base battles.
 3. Infantry garrisoning buildings in battle (cover + capture mechanics).
 4. AI scouting and strategic fog of war for the AI; difficulty setting.

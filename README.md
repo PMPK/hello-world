@@ -106,3 +106,8 @@ Branch: `gh-pages` / `(root)` → Save.* After that every push to `main` updates
 ## License / assets
 
 All code, models (procedural geometry) and icons are original to this project. No third-party game assets.
+
+## Original repository note
+
+> It is my first project over there, and I hope, not the last one
+> I am going through the step three and was asked to write some more info about myself so that's what I do now.

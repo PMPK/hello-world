@@ -20,6 +20,16 @@ export function armyMen(a: Army): number {
   return n;
 }
 
+/** How far (map units) a force can still drive before its vehicles run dry (Infinity on foot). */
+export function fuelRange(units: { designId: string; fuel: number }[]): number {
+  let r = Infinity;
+  for (const u of units) {
+    const st = statsOf(u.designId);
+    if (st.fuelPerUnit > 0) r = Math.min(r, u.fuel / st.fuelPerUnit);
+  }
+  return r;
+}
+
 export function maxRations(a: Army): number {
   return Math.max(4, armyMen(a) * FOOD_PER_PERSON_HOUR * 24 * RATION_DAYS);
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { dist } from '../src/core/math';
 import { CAMPAIGN_HOURS_PER_SECOND } from '../src/core/time';
-import { formArmyFromGarrison, garrisonArmy, orderAttack, orderMove } from '../src/campaign/armies';
+import { formArmyFromGarrison, fuelRange, garrisonArmy, orderAttack, orderMove } from '../src/campaign/armies';
 import { createUnit } from '../src/campaign/units';
 import { advanceCampaign, SIM_STEP } from '../src/campaign/sim';
 import { armiesOf } from '../src/campaign/queries';
@@ -71,6 +71,17 @@ describe('armies', () => {
     expect(garrisonArmy(c, army.id)).toBe(true);
     expect(c.pBase.garrison.length).toBe(n);
     expect(c.state.armies[army.id]).toBeUndefined();
+  });
+
+  it('fuel range is limited by the thirstiest vehicle; infantry walk', () => {
+    const c = freshCampaign();
+    const tank = createUnit(c.state, 'mbt');
+    const jeep = createUnit(c.state, 'recon_jeep');
+    const inf = createUnit(c.state, 'rifle_squad');
+    tank.fuel = 10;
+    const perUnit = statsOf('mbt').fuelPerUnit;
+    expect(fuelRange([tank, jeep, inf])).toBeCloseTo(10 / perUnit, 5);
+    expect(fuelRange([inf])).toBe(Infinity);
   });
 
   it('army speed is limited by the slowest unit', () => {

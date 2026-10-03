@@ -5,6 +5,7 @@ import { FACTION_DEFS } from '../data/factions';
 import { statsOf } from '../units/stats';
 import {
   formArmyFromGarrison,
+  fuelRange,
   garrisonArmy,
   orderAttack,
   orderMove,
@@ -191,6 +192,15 @@ export class CampaignMode implements Mode, CampaignController {
       const pips = a.units.length <= 4 ? 1 : a.units.length <= 10 ? 2 : 3;
       o.symbol(p.x, p.y, kind, friendly, selected ? 15 : 13, { selected, pips });
       if (zoomed || selected) o.labelAvoid(p.x, p.y + 17, `${a.name} · ${a.units.length}`, friendly ? '#d8ecff' : '#ffd2c8', 10);
+      if (friendly) {
+        const range = fuelRange(a.units);
+        const dry = a.units.some((u) => {
+          const st = statsOf(u.designId);
+          return st.ammoCapacity > 0 && u.ammo < st.ammoCapacity * 0.25;
+        });
+        if (range < 40) o.label(p.x, p.y - 18, 'LOW FUEL', '#e8c33c', 9);
+        else if (dry) o.label(p.x, p.y - 18, 'LOW AMMO', '#e8c33c', 9);
+      }
       void jeep;
     }
     // pending order line for the selected army

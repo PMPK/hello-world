@@ -4,7 +4,7 @@ import { RESOURCES, STOCK_RESOURCES, canAfford, formatCost, type PartialStock } 
 import { UNIT_DESIGNS } from '../data/unitDesigns';
 import { campaignDay, formatCampaignTime, formatDuration, type SpeedSetting } from '../core/time';
 import { dist } from '../core/math';
-import { armyBaseSpeed, armyMen, maxRations } from '../campaign/armies';
+import { armyBaseSpeed, armyMen, fuelRange, maxRations } from '../campaign/armies';
 import { canBuildOutpost, canBuildType, OUTPOST_RANGE } from '../campaign/construction';
 import { affordability, designsFor, MAX_QUEUE } from '../campaign/production';
 import { basesOf, isOutpost, relationOf } from '../campaign/queries';
@@ -295,8 +295,10 @@ export class CampaignHud {
     const has = (t: BuildingTypeId, kind?: string): boolean =>
       Object.values(s.buildings).some((b) => b.factionId === pf && b.typeId === t && b.state !== 'destroyed' && (!kind || (b.siteId && s.sites[b.siteId]?.kind === kind)));
     const units = [...Object.values(s.armies).filter((a) => a.factionId === pf).flatMap((a) => a.units), ...basesOf(s, pf).flatMap((b) => b.garrison)];
+    const infantry = units.filter((u) => u.designId === 'rifle_squad').length;
     const steps: [boolean, string][] = [
       [has('refinery'), 'Build a Refinery — tap your base, then Build.'],
+      [infantry >= 5, 'Train a Rifle Squad at the Barracks to strengthen the garrison.'],
       [has('extractor', 'hydrocarbons'), 'Claim a hydrocarbon field (amber diamond) with an Oil Well.'],
       [has('power_plant'), 'Build a Power Plant before the grid overloads.'],
       [has('factory'), 'Build an Industrial Factory for components and ammunition.'],
@@ -558,12 +560,14 @@ export class CampaignHud {
     else if (o.type === 'attack_building') order = 'Attacking outpost';
     else if (o.type === 'return') order = 'Returning to base';
     const days = a.food / Math.max(0.001, armyMen(a) * FOOD_PER_PERSON_HOUR * 24);
+    const range = fuelRange(a.units);
     const sec = this.section(body, 'Status');
     this.kv(sec, [
       ['Orders', order, o.type === 'idle' ? 'muted' : 'accent'],
       ['Units / men', `${a.units.length} / ${armyMen(a)}`],
       ['Speed', `${armyBaseSpeed(a).toFixed(1)} km/h`],
       ['Rations', `${days.toFixed(1)} days`, days < 1 ? 'bad' : days < 2 ? 'warn' : ''],
+      ['Fuel range', Number.isFinite(range) ? `${Math.floor(range)} km` : 'on foot', range < 40 ? 'bad' : range < 90 ? 'warn' : ''],
     ]);
     sec.append(el('div', { style: { marginTop: '6px' } }, bar(a.food / Math.max(1, maxRations(a)))));
     const us = this.section(body, 'Units', 'HP · AMMO · FUEL');

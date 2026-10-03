@@ -3,7 +3,7 @@ import { BUILDINGS, type BuildingTypeId, type SiteKind } from '../data/buildings
 import { FACTION_DEFS } from '../data/factions';
 import { canAfford } from '../data/resources';
 import { statsOf } from '../units/stats';
-import { formArmyFromGarrison, orderAttack, orderReturn, type AttackTarget } from '../campaign/armies';
+import { formArmyFromGarrison, fuelRange, orderAttack, orderReturn, type AttackTarget } from '../campaign/armies';
 import {
   canBuildOutpost,
   OUTPOST_RANGE,
@@ -292,16 +292,6 @@ function enemyTargets(state: CampaignState, factionId: string): TargetOption[] {
     out.push({ target: { kind: 'army', id: a.id }, x: a.x, z: a.z, defense: armyStrength(a), value: 4 });
   }
   return out;
-}
-
-/** How far (map units) a force can still drive before its vehicles run dry. */
-export function fuelRange(units: { designId: string; fuel: number }[]): number {
-  let r = Infinity;
-  for (const u of units) {
-    const st = statsOf(u.designId);
-    if (st.fuelPerUnit > 0) r = Math.min(r, u.fuel / st.fuelPerUnit);
-  }
-  return r;
 }
 
 /** Fit to keep fighting: enough fuel, ammunition and health. */
