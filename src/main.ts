@@ -33,6 +33,14 @@ if (!hasWebGL2()) {
   }
 }
 
-if ('serviceWorker' in navigator && import.meta.env.PROD) {
-  registerSW({ immediate: true });
+// Offline support. Skipped inside frames (embedded previews cannot run service workers).
+const framed = (() => {
+  try {
+    return window.top !== window.self;
+  } catch {
+    return true;
+  }
+})();
+if ('serviceWorker' in navigator && import.meta.env.PROD && !framed) {
+  registerSW({ immediate: true, onRegisterError: () => undefined });
 }

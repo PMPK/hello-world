@@ -37,7 +37,16 @@
 - **PWA**: manifest (fullscreen, landscape), generated icons, Workbox precache (offline), install prompt button.
 - **Quality settings**: low / medium / high (pixel ratio, shadows, tree density); FPS counter option.
 - **Tests**: 33 Vitest unit tests; Playwright smoke tests on phone-landscape touch and desktop mouse profiles.
-- **Deployment**: GitHub Actions CI + Pages deploy workflow (gh-pages branch).
+- **Deployment**: GitHub Actions CI + Pages deploy workflow (gh-pages branch). A single-file build is also
+  published as a claude.ai Artifact (https://claude.ai/artifact/7qGUMq5vWjnaNKRHEyempW).
+
+## Deployment status (end of the MVP session)
+
+- The Claude GitHub App had **no write access** to `PMPK/hello-world` (git push and the GitHub connector both
+  returned 403), so the MVP commits could not be pushed from the session. The full history was handed over as
+  a git bundle. Once access exists (or the bundle is pushed by hand), pushing `claude/planet-x-mvp-1f1t2m`
+  and/or `main` triggers the deploy workflow.
+- GitHub Pages must be switched on once: *Settings → Pages → Source: Deploy from a branch → gh-pages / (root)*.
 
 ## Known issues / limitations
 

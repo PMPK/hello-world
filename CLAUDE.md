@@ -46,6 +46,11 @@ When piping long headless runs, write output to a file (`> out.txt`) — `npx` o
 `window.__PX` exposes `app`, `state()`, `battle()` and `debugContact('field' | 'base_assault')` (spawns a hostile
 force next to your army/base and opens the contact dialog). The e2e test uses these.
 
+## Artifact build
+`npm run build:artifact` produces `dist-artifact/planet-x.html`: one self-contained HTML (inline CSS/JS,
+service worker stubbed out via `src/pwa/stub.ts`) for hosting as a claude.ai Artifact. The published artifact
+is https://claude.ai/artifact/7qGUMq5vWjnaNKRHEyempW — republish to that URL (pass it as `url`) to update it.
+
 ## Deployment
 Pushing to `main` runs `.github/workflows/deploy.yml` → publishes to the `gh-pages` branch → GitHub Pages
 (`https://pmpk.github.io/hello-world/`). Pages must be set to *Deploy from a branch: gh-pages / (root)* once.

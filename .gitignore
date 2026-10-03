@@ -10,3 +10,4 @@ e2e/screenshots/
 .vite/
 # generated at build time by scripts/generate-icons.mjs
 public/icons/*.png
+dist-artifact/

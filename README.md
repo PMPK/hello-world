@@ -9,8 +9,11 @@ chain, raising task forces and moving them across the terrain — and fight real
 battles on battlefields generated from the same campaign state, including your actual base
 buildings. Battle results are permanent.
 
-**Play:** https://pmpk.github.io/hello-world/ (published by GitHub Actions from `main`; see [Deployment](#deployment)).
-Installable as a PWA (Chrome on Android: menu → *Install app*). Works offline after the first load.
+**Play:**
+- GitHub Pages: https://pmpk.github.io/hello-world/ — published by GitHub Actions (see [Deployment](#deployment)).
+  Installable as a PWA (Chrome on Android: menu → *Install app*); works offline after the first load.
+- claude.ai Artifact build: https://claude.ai/artifact/7qGUMq5vWjnaNKRHEyempW — single-file build
+  (`npm run build:artifact`), private to the owner until shared from its Share menu; no offline/PWA there.
 
 ## The loop
 
@@ -58,6 +61,7 @@ npm run check        # typecheck + unit tests + production build
 npm run test:e2e     # Playwright smoke tests (builds + serves the production bundle)
 npm run sim:campaign -- 1234 30   # headless 30-day campaign with auto-resolved battles
 npm run sim:battle   # headless balance matrix of unit match-ups
+npm run build:artifact   # single self-contained HTML (no service worker) for embedded hosting
 ```
 
 PWA icons are generated procedurally by `scripts/generate-icons.mjs` (runs automatically before `dev`/`build`).

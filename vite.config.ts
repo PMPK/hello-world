@@ -1,4 +1,5 @@
 import { defineConfig } from 'vitest/config';
+import { fileURLToPath } from 'node:url';
 import { VitePWA } from 'vite-plugin-pwa';
 import { GAME_INFO } from './src/config/gameInfo.ts';
 
@@ -18,12 +19,22 @@ function resolveBase(): string {
   return '/';
 }
 
+/**
+ * VITE_TARGET=artifact builds a service-worker-free bundle with relative paths
+ * (packaged into a single self-contained HTML file by scripts/build-artifact.mjs).
+ */
+const artifact = process.env.VITE_TARGET === 'artifact';
+
 export default defineConfig({
-  base: resolveBase(),
+  base: artifact ? './' : resolveBase(),
   build: {
     target: 'es2020',
     chunkSizeWarningLimit: 1600,
     sourcemap: false,
+    outDir: artifact ? 'dist-artifact' : 'dist',
+  },
+  resolve: {
+    alias: artifact ? { 'virtual:pwa-register': fileURLToPath(new URL('./src/pwa/stub.ts', import.meta.url)) } : {},
   },
   plugins: [
     {
@@ -32,7 +43,8 @@ export default defineConfig({
         return html.replace(/%GAME_TITLE%/g, GAME_INFO.title).replace(/%GAME_DESCRIPTION%/g, GAME_INFO.description);
       },
     },
-    VitePWA({
+    !artifact &&
+      VitePWA({
       registerType: 'autoUpdate',
       injectRegister: false,
       includeAssets: ['favicon.svg', 'icons/apple-touch-icon.png', '.nojekyll'],

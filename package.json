@@ -17,7 +17,8 @@
     "icons": "node scripts/generate-icons.mjs",
     "sim:campaign": "tsx scripts/sim-campaign.ts",
     "sim:battle": "tsx scripts/sim-battle.ts",
-    "check": "npm run typecheck && npm run test && npm run build"
+    "check": "npm run typecheck && npm run test && npm run build",
+    "build:artifact": "VITE_TARGET=artifact vite build && node scripts/build-artifact.mjs dist-artifact/planet-x.html"
   },
   "engines": {
     "node": ">=20.19.0"
