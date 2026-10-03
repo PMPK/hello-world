@@ -95,6 +95,12 @@ export function applyBattleResult(ctx: SimContext, setup: BattleSetup, result: B
   for (const rb of result.buildings) {
     const b = state.buildings[rb.campaignId];
     if (!b) continue;
+    // defences fired ammunition from their base's stock; crews of destroyed positions are lost
+    const owner = state.bases[b.baseId];
+    if (owner) {
+      if (rb.ammoSpent > 0) owner.stock.ammo = Math.max(0, owner.stock.ammo - rb.ammoSpent);
+      if (rb.crewLost > 0) owner.population = Math.max(0, owner.population - rb.crewLost);
+    }
     if (rb.destroyed) {
       if (b.state !== 'destroyed') {
         b.state = 'destroyed';

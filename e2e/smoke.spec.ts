@@ -173,9 +173,13 @@ test('base assault battle contains the base buildings', async ({ page }) => {
       .map((b: any) => b.id)
       .sort();
   });
+  // crewed defences take part in the assault
+  expect(await px(page, (p) => p.debugFortify(['bunker', 'at_emplacement']))).toBe(2);
   expect(await px(page, (p) => p.debugContact('base_assault'))).toBe(true);
   await page.getByTestId('command-battle').click();
   await expect(page.getByTestId('withdraw')).toBeVisible();
+  const armed: number = await px(page, (p) => p.battle().buildings.filter((b: any) => b.defense && b.defense.crew > 0 && b.defense.ammo > 0).length);
+  expect(armed).toBe(2);
   const battleBuildings: string[] = await px(page, (p) =>
     p
       .battle()

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { BattleSim, isActive, outOfAmmo } from '../battle/sim';
+import { BattleSim, isActive, isArmed, outOfAmmo } from '../battle/sim';
 import { bHeight } from '../battle/terrain';
 import type { BattleResult, BattleSetup, BUnit, SideIndex } from '../battle/types';
 import type { Terrain } from '../world/terrain';
@@ -232,6 +232,21 @@ export class BattleMode implements Mode, BattleController {
     for (const b of this.sim.buildings) {
       if (b.destroyed) continue;
       const hpF = b.hp / b.maxHp;
+      if (b.defense) {
+        // defensive positions are always marked: type tag, condition and (ours) ammunition
+        const p = this.view.toScreen(b.x, bHeight(this.sim.terrain, b.x, b.z) + 9, b.z);
+        if (!p) continue;
+        const friendly = b.side === this.playerSide;
+        const tag = b.defense.weapons.some((w) => w.antiVehicleOnly) ? 'AT GUN' : 'MG NEST';
+        const armed = isArmed(b);
+        o.label(p.x, p.y - 9, armed ? tag : `${tag} · SILENT`, armed ? (friendly ? FRIEND : FOE) : '#8a8a8a', 9);
+        o.bar(p.x, p.y, 30, hpF, friendly ? FRIEND : FOE, 3);
+        if (friendly && b.defense.ammoCapacity > 0) {
+          const a = b.defense.ammo / b.defense.ammoCapacity;
+          o.bar(p.x, p.y + 5, 30, a, a < 0.25 ? '#e2583f' : '#d9a03a', 2);
+        }
+        continue;
+      }
       if (hpF >= 0.999 && !far) continue;
       const p = this.view.toScreen(b.x, bHeight(this.sim.terrain, b.x, b.z) + 22, b.z);
       if (!p) continue;

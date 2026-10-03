@@ -1,6 +1,6 @@
 import type { BattleKind } from '../campaign/types';
 import type { BuildingTypeId, SiteKind } from '../data/buildings';
-import type { WeaponClass } from '../data/components';
+import type { WeaponClass, WeaponDef } from '../data/components';
 import type { UnitStats } from '../units/stats';
 
 /** Battlefield edge length in metres. */
@@ -58,6 +58,10 @@ export interface BattleBuildingSpec {
   hp: number;
   maxHp: number;
   state: 'active' | 'construction' | 'destroyed';
+  /** Defensive structures: crew on duty when the battle started. */
+  crew?: number;
+  /** Defensive structures: rounds drawn from the base stock for this battle. */
+  ammo?: number;
 }
 
 /** Everything needed to (re)create a battle. Plain JSON. */
@@ -127,6 +131,31 @@ export interface BUnit {
   menStart: number;
 }
 
+/** Weapon state of a crewed defensive structure. */
+export interface BDefense {
+  weapons: WeaponDef[];
+  weaponCd: number[];
+  crew: number;
+  crewMax: number;
+  /** Crew at the start of the battle (casualties = crewStart - crew). */
+  crewStart: number;
+  ammo: number;
+  ammoStart: number;
+  ammoCapacity: number;
+  vision: number;
+  eyeHeight: number;
+  /** Absolute heading of the gun mount. */
+  turret: number;
+  /** Traverse rate of the mount (rad/s). */
+  traverse: number;
+  target: TargetRef | null;
+  nextAcquire: number;
+  lastFired: number;
+  kills: number;
+  /** Combat value at full health (UnitStats.power scale). */
+  power: number;
+}
+
 export interface BBuilding {
   id: number;
   spec: BattleBuildingSpec;
@@ -138,6 +167,8 @@ export interface BBuilding {
   radius: number;
   side: SideIndex;
   destroyed: boolean;
+  /** Crewed defensive structure (bunker, gun emplacement); null for other buildings. */
+  defense: BDefense | null;
 }
 
 export type BattleEvent =
@@ -184,6 +215,16 @@ export interface BattleUnitResult {
   fuel: number;
 }
 
+export interface BattleBuildingResult {
+  campaignId: string;
+  hp: number;
+  destroyed: boolean;
+  /** Defences: ammunition fired (drawn from the owning base's stock). */
+  ammoSpent: number;
+  /** Defences: crew killed when the position was destroyed. */
+  crewLost: number;
+}
+
 export interface BattleResult {
   battleId: string;
   kind: BattleKind;
@@ -192,7 +233,7 @@ export interface BattleResult {
   durationSeconds: number;
   campaignHours: number;
   units: BattleUnitResult[];
-  buildings: { campaignId: string; hp: number; destroyed: boolean }[];
+  buildings: BattleBuildingResult[];
   sides: [SideSummary, SideSummary];
   playerWithdrew: boolean;
 }

@@ -23,6 +23,7 @@ import {
   enemyFactionOf,
   garrisonStrength,
   isOutpost,
+  relationOf,
   strengthOf,
 } from '../campaign/queries';
 import type { AIState, Army, Base, CampaignState } from '../campaign/types';
@@ -68,6 +69,24 @@ function tryBuild(ctx: SimContext, base: Base, typeId: BuildingTypeId): TryResul
   if (!canAfford(base.stock, BUILDINGS[typeId].cost)) return 'unaffordable';
   const a = rng.range(0, Math.PI * 2);
   const r = rng.range(3, base.radius - 2.5);
+  const spot = suggestPlacement(state, world, base, typeId, base.x + Math.cos(a) * r, base.z + Math.sin(a) * r);
+  if (!spot) return 'impossible';
+  return startConstruction(ctx, base.id, typeId, spot.x, spot.z).ok ? 'ok' : 'impossible';
+}
+
+/** Place a defensive position on the perimeter, covering the approach from the nearest enemy base. */
+function tryBuildDefense(ctx: SimContext, base: Base, typeId: BuildingTypeId): TryResult {
+  const { state, world, rng } = ctx;
+  if (!canAfford(base.stock, BUILDINGS[typeId].cost)) return 'unaffordable';
+  const enemy = enemyFactionOf(state, base.factionId);
+  const enemyBase = enemy
+    ? basesOf(state, enemy).sort((a, b) => dist(a.x, a.z, base.x, base.z) - dist(b.x, b.z, base.x, base.z))[0]
+    : undefined;
+  const toward = enemyBase ? Math.atan2(enemyBase.z - base.z, enemyBase.x - base.x) : rng.range(0, Math.PI * 2);
+  // fan successive positions out to both sides of the threat axis
+  const n = count(state, base, 'bunker') + count(state, base, 'at_emplacement');
+  const a = toward + (n % 2 === 0 ? 1 : -1) * Math.ceil(n / 2) * 0.45 + rng.range(-0.12, 0.12);
+  const r = base.radius - 1.6;
   const spot = suggestPlacement(state, world, base, typeId, base.x + Math.cos(a) * r, base.z + Math.sin(a) * r);
   if (!spot) return 'impossible';
   return startConstruction(ctx, base.id, typeId, spot.x, spot.z).ok ? 'ok' : 'impossible';
@@ -164,6 +183,12 @@ function thinkEconomy(ctx: SimContext, ai: AIState, base: Base): void {
   const perFarm = (farmOut.outputs.food ?? 0) / farmOut.cycleHours;
   const eaters = base.population + soldiersOf(state, base.factionId) + 10;
   const foodNet = farms * perFarm - eaters * 0.02;
+  const enemy = enemyFactionOf(state, base.factionId);
+  const rel = enemy ? relationOf(state, base.factionId, enemy) : null;
+  const threatened = !!enemy && (areHostile(state, base.factionId, enemy) || (rel?.tension ?? 0) > 50);
+  const industry = count(state, base, 'refinery') > 0 && count(state, base, 'factory') > 0;
+  const bunkers = count(state, base, 'bunker');
+  const atGuns = count(state, base, 'at_emplacement');
 
   type Step = { type: BuildingTypeId | 'mine' | 'well'; when: boolean; blocking?: boolean };
   const plan: Step[] = [
@@ -176,6 +201,8 @@ function thinkEconomy(ctx: SimContext, ai: AIState, base: Base): void {
     { type: 'vehicle_depot', when: count(state, base, 'vehicle_depot') < 1, blocking: true },
     { type: 'mine', when: mineralSites < 2 },
     { type: 'barracks', when: count(state, base, 'barracks') < 1, blocking: true },
+    { type: 'bunker', when: industry && threatened && bunkers < 1 },
+    { type: 'at_emplacement', when: industry && threatened && atGuns < 1 && bunkers >= 1 },
     { type: 'habitat', when: base.population >= housing - 8 },
     { type: 'well', when: hydroSites < 2 },
     { type: 'mine', when: mineralSites < 3 },
@@ -183,6 +210,8 @@ function thinkEconomy(ctx: SimContext, ai: AIState, base: Base): void {
     { type: 'refinery', when: count(state, base, 'refinery') < 2 && mineralSites >= 3 },
     { type: 'factory', when: count(state, base, 'factory') < 2 && base.stock.refined > 120 },
     { type: 'power_plant', when: energySurplus < 14 },
+    { type: 'bunker', when: industry && bunkers < 2 && (threatened || state.time > 24 * 8) },
+    { type: 'at_emplacement', when: industry && atGuns < 2 && bunkers >= 2 && base.stock.components > 40 },
   ];
   for (const step of plan) {
     if (!step.when) continue;
@@ -193,6 +222,7 @@ function thinkEconomy(ctx: SimContext, ai: AIState, base: Base): void {
     let r: TryResult;
     if (step.type === 'mine') r = tryOutpost(ctx, base, 'minerals');
     else if (step.type === 'well') r = tryOutpost(ctx, base, 'hydrocarbons');
+    else if (BUILDINGS[step.type].defense) r = tryBuildDefense(ctx, base, step.type);
     else r = tryBuild(ctx, base, step.type);
     if (r === 'ok') return;
     if (r === 'unaffordable' && step.blocking) return; // save up for it

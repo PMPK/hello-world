@@ -38,6 +38,7 @@ export class BattleView {
   private sun!: THREE.DirectionalLight;
   private sides: [SideMeshes, SideMeshes];
   private buildingObjs = new Map<number, { obj: THREE.Object3D; key: string }>();
+  private turretObjs = new Map<number, THREE.Mesh>();
   private selRings: THREE.InstancedMesh;
   private time = 0;
   private damagedMat = new THREE.MeshLambertMaterial({ vertexColors: true, color: 0x8f7d72 });
@@ -277,16 +278,25 @@ export class BattleView {
       const cur = this.buildingObjs.get(b.id);
       if (cur && cur.key === key) continue;
       if (cur) this.scene.remove(cur.obj);
+      this.turretObjs.delete(b.id);
       const accent = FACTION_DEFS[b.spec.factionId]?.structureAccent ?? '#888888';
       let obj: THREE.Object3D;
       if (b.destroyed) {
         obj = new THREE.Mesh(Models.rubble(def.battleFootprint, b.id), Materials.standard);
       } else {
         const g = new THREE.Group();
-        const m = new THREE.Mesh(Models.building(b.spec.typeId, accent, b.spec.siteKind), hpF < 0.5 ? this.damagedMat : Materials.standard);
+        // crewed gun emplacements get a separately traversing gun
+        const turretGeo = b.defense ? Models.defenseTurret(b.spec.typeId) : null;
+        const m = new THREE.Mesh(Models.building(b.spec.typeId, accent, b.spec.siteKind, !!turretGeo), hpF < 0.5 ? this.damagedMat : Materials.standard);
         m.castShadow = true;
         m.receiveShadow = true;
         g.add(m);
+        if (turretGeo) {
+          const gun = new THREE.Mesh(turretGeo, Materials.standard);
+          gun.castShadow = true;
+          g.add(gun);
+          this.turretObjs.set(b.id, gun);
+        }
         if (b.spec.state === 'construction') {
           m.scale.y = 0.4;
           g.add(new THREE.Mesh(Models.scaffold(def.battleFootprint), Materials.standard));
@@ -348,6 +358,10 @@ export class BattleView {
       }
     }
     this.syncBuildings();
+    for (const [id, gun] of this.turretObjs) {
+      const b = sim.buildingById(id);
+      if (b?.defense) gun.rotation.y = b.defense.turret - b.rot;
+    }
     this.syncUnits();
     this.effects.update(dt);
   }

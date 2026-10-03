@@ -2,6 +2,7 @@ import { angleDiff, approachAngle, clamp, dist } from '../core/math';
 import { mixSeed, Rng } from '../core/rng';
 import { BUILDINGS } from '../data/buildings';
 import type { WeaponDef } from '../data/components';
+import { defenseStatsOf } from '../units/defense';
 import { statsOf } from '../units/stats';
 import { astar, nearestPassable, type GridGraph } from '../world/pathfinding';
 import type { Terrain } from '../world/terrain';
@@ -23,6 +24,7 @@ import {
   type BattleResult,
   type BattleSetup,
   type BBuilding,
+  type BDefense,
   type BUnit,
   type SideIndex,
   type SideSummary,
@@ -46,6 +48,35 @@ export function isActive(u: BUnit): boolean {
   return u.alive && !u.retreated && !u.reserve;
 }
 
+/** A defensive structure that can still fight: standing, crewed and with ammunition. */
+export function isArmed(b: BBuilding): boolean {
+  const d = b.defense;
+  if (!d || b.destroyed || d.crew <= 0) return false;
+  for (const w of d.weapons) if (d.ammo >= w.ammoPerShot) return true;
+  return false;
+}
+
+/** Who fires a shot: a unit or a defensive structure. */
+interface ShotSource {
+  id: number;
+  x: number;
+  z: number;
+  /** Absolute muzzle height. */
+  y: number;
+  accuracyBonus: number;
+  suppression: number;
+  /** Firepower multiplier for squad / crew-served weapons. */
+  menFactor: number;
+  unit: BUnit | null;
+  building: BBuilding | null;
+}
+
+/** Traverse rates (rad/s): heavy gun mounts vs casemate machine guns. */
+const MOUNT_TRAVERSE = 1.1;
+const CASEMATE_TRAVERSE = 4;
+/** Weapons doing less than this per hit cannot hurt hardened defences. */
+const HARDENED_MIN_DAMAGE = 20;
+
 /** True when the unit cannot fire any of its weapons for lack of ammunition. */
 export function outOfAmmo(u: BUnit): boolean {
   if (!u.stats.weapons.length) return false;
@@ -61,6 +92,14 @@ export function penetrationFactor(pen: number, armor: number): number {
   return Math.max(0.02, r * r * 0.6);
 }
 
+/** Whether a weapon can do meaningful harm to a unit (AT-only weapons vs soft targets, small arms vs tanks). */
+function canHurtUnit(w: WeaponDef, e: BUnit): boolean {
+  if (w.antiVehicleOnly && !e.stats.isVehicle) return false;
+  // small arms vs main battle tanks is pointless
+  if (e.stats.family === 'tank' && penetrationFactor(w.penetration, e.stats.armor * 0.35) < 0.05) return false;
+  return true;
+}
+
 /**
  * The tactical battle simulation. Pure logic (no Three.js); the renderer
  * reads `units`, `buildings` and drains `events`.
@@ -71,6 +110,9 @@ export class BattleSim {
   readonly rng: Rng;
   units: BUnit[] = [];
   buildings: BBuilding[] = [];
+  /** id → unit / building lookups (the arrays never change after deployment). */
+  private unitIndex = new Map<number, BUnit>();
+  private buildingIndex = new Map<number, BBuilding>();
   time = 0;
   events: BattleEvent[] = [];
   finished = false;
@@ -109,6 +151,7 @@ export class BattleSim {
 
     for (const b of setup.buildings) {
       const def = BUILDINGS[b.typeId];
+      const destroyed = b.state === 'destroyed' || b.hp <= 0;
       this.buildings.push({
         id: this.nextId++,
         spec: b,
@@ -119,17 +162,48 @@ export class BattleSim {
         maxHp: b.maxHp,
         radius: def.battleFootprint,
         side: b.side,
-        destroyed: b.state === 'destroyed' || b.hp <= 0,
+        destroyed,
+        defense: destroyed ? null : this.makeDefense(b),
       });
     }
     for (const side of [0, 1] as SideIndex[]) this.adjustEntry(side);
     for (const side of [0, 1] as SideIndex[]) this.deploySide(side);
+    for (const u of this.units) this.unitIndex.set(u.id, u);
+    for (const b of this.buildings) this.buildingIndex.set(b.id, b);
     for (const side of [0, 1] as SideIndex[]) {
       this.startPower[side] = this.sidePower(side, true);
     }
     for (const s of opts.aiSides) this.ais[s] = new TacticalAI(this, s);
-    this.undefended = (setup.kind === 'base_assault' || setup.kind === 'outpost') && this.units.every((u) => u.side !== 1);
+    this.undefended =
+      (setup.kind === 'base_assault' || setup.kind === 'outpost') &&
+      this.units.every((u) => u.side !== 1) &&
+      !this.buildings.some((b) => b.side === 1 && isArmed(b));
     this.updateVisibility();
+  }
+
+  private makeDefense(b: BattleSetup['buildings'][number]): BDefense | null {
+    const ds = defenseStatsOf(b.typeId);
+    if (!ds || b.state !== 'active' || !(b.crew && b.crew > 0)) return null;
+    const ammo = Math.max(0, b.ammo ?? 0);
+    return {
+      weapons: ds.weapons,
+      weaponCd: ds.weapons.map(() => this.rng.range(0, 1.5)),
+      crew: Math.min(b.crew, ds.crew),
+      crewMax: ds.crew,
+      crewStart: Math.min(b.crew, ds.crew),
+      ammo,
+      ammoStart: ammo,
+      ammoCapacity: ds.ammoCapacity,
+      vision: ds.vision,
+      eyeHeight: ds.eyeHeight,
+      turret: b.rot,
+      traverse: ds.turret ? MOUNT_TRAVERSE : CASEMATE_TRAVERSE,
+      target: null,
+      nextAcquire: this.rng.range(0, ACQUIRE_INTERVAL),
+      lastFired: -99,
+      kills: 0,
+      power: ds.power,
+    };
   }
 
   // ---------------------------------------------------------------------------
@@ -316,11 +390,11 @@ export class BattleSim {
   // ---------------------------------------------------------------------------
 
   unitById(id: number): BUnit | undefined {
-    return this.units.find((u) => u.id === id);
+    return this.unitIndex.get(id) ?? this.units.find((u) => u.id === id);
   }
 
   buildingById(id: number): BBuilding | undefined {
-    return this.buildings.find((b) => b.id === id);
+    return this.buildingIndex.get(id) ?? this.buildings.find((b) => b.id === id);
   }
 
   activeUnits(side: SideIndex): BUnit[] {
@@ -333,6 +407,16 @@ export class BattleSim {
       if (u.side !== side || !u.alive || u.retreated) continue;
       if (u.reserve && !includeReserves) continue;
       p += u.stats.power * (u.stats.maxHp > 0 ? u.hp / u.stats.maxHp : 1);
+    }
+    return p + this.defensePower(side);
+  }
+
+  /** Combat value of a side's armed defensive structures. */
+  defensePower(side: SideIndex): number {
+    let p = 0;
+    for (const b of this.buildings) {
+      if (b.side !== side || !b.defense || !isArmed(b)) continue;
+      p += b.defense.power * (b.hp / b.maxHp) * (b.defense.crew / b.defense.crewMax);
     }
     return p;
   }
@@ -538,6 +622,7 @@ export class BattleSim {
       this.fire(u, dt);
       u.suppression = Math.max(0, u.suppression - 0.14 * dt);
     }
+    for (const b of this.buildings) if (isArmed(b)) this.updateDefense(b, dt);
     this.separate();
     this.deployReserves();
 
@@ -604,13 +689,25 @@ export class BattleSim {
   }
 
   weaponCanEngage(_u: BUnit, w: WeaponDef, t: TargetRef): boolean {
-    if (t.kind === 'building') return w.vsStructure > 0.12 || w.antiVehicleOnly === true;
+    if (t.kind === 'building') {
+      const b = this.buildingById(t.id);
+      const fort = b ? BUILDINGS[b.spec.typeId].defense : undefined;
+      if (fort) {
+        // hardened positions need heavy weapons; open gun pits can be swept by small arms while manned
+        if (w.damage * w.vsStructure * (1 - fort.armor) >= HARDENED_MIN_DAMAGE) return true;
+        return fort.exposure >= 0.5 && w.vsInfantry >= 0.5 && !!b!.defense && b!.defense.crew > 0;
+      }
+      return w.vsStructure > 0.12 || w.antiVehicleOnly === true;
+    }
     const e = this.unitById(t.id);
-    if (!e) return false;
-    if (w.antiVehicleOnly && !e.stats.isVehicle) return false;
-    // small arms vs main battle tanks is pointless
-    if (e.stats.family === 'tank' && penetrationFactor(w.penetration, e.stats.armor * 0.35) < 0.05) return false;
-    return true;
+    return !!e && canHurtUnit(w, e);
+  }
+
+  /** Longest range at which any of u's weapons can hurt unit e (0 if none can). */
+  private engageRangeVs(u: BUnit, e: BUnit): number {
+    let r = 0;
+    for (const w of u.stats.weapons) if (w.range > r && canHurtUnit(w, e)) r = w.range;
+    return r;
   }
 
   /** Expected damage per second of unit u against e (rough). */
@@ -642,6 +739,8 @@ export class BattleSim {
       if (e.side === u.side || !isActive(e) || !e.seenBy[u.side]) continue;
       const d = dist(u.x, u.z, e.x, e.z);
       if (d > range) continue;
+      // only weapons that can hurt this target count (e.g. AT launchers vs tanks)
+      if (d > this.engageRangeVs(u, e)) continue;
       const eff = this.effectiveness(u, e);
       if (eff <= 0.01) continue;
       let score = (eff / Math.max(30, e.hp)) * (0.6 + e.stats.power / 300) * (1.4 - d / (range * 1.6));
@@ -653,10 +752,23 @@ export class BattleSim {
         best = { kind: 'unit', id: e.id };
       }
     }
-    // Structures are only engaged on explicit orders (or AI focus), so bases can be captured intact.
+    // Structures are only engaged on explicit orders (or AI focus), so bases can be captured intact —
+    // except armed defensive positions, which are fought like any other enemy.
     if (!best && u.focus && this.targetValid(u, u.focus) && u.focus.kind === 'building') {
       const p = this.targetPos(u.focus)!;
       if (dist(u.x, u.z, p.x, p.z) < range + 20) best = u.focus;
+    }
+    if (!best) {
+      let bd = Infinity;
+      for (const b of this.buildings) {
+        if (b.side === u.side || !isArmed(b)) continue;
+        const ref: TargetRef = { kind: 'building', id: b.id };
+        const d = dist(u.x, u.z, b.x, b.z) - b.radius * 0.5;
+        if (d >= bd || d > this.engageRange(u, ref) || !u.stats.weapons.some((w) => this.weaponCanEngage(u, w, ref))) continue;
+        if (!bLineOfSight(this.terrain, u.x, u.z, eyeHeight(u), b.x, b.z, 2.5)) continue;
+        bd = d;
+        best = ref;
+      }
     }
     u.target = best;
   }
@@ -880,13 +992,33 @@ export class BattleSim {
   }
 
   private resolveShot(u: BUnit, w: WeaponDef, t: TargetRef, p: { x: number; z: number }, moving: boolean): void {
-    const d = dist(u.x, u.z, p.x, p.z);
-    const fromY = bHeight(this.terrain, u.x, u.z) + eyeHeight(u);
+    this.shoot(
+      {
+        id: u.id,
+        x: u.x,
+        z: u.z,
+        y: bHeight(this.terrain, u.x, u.z) + eyeHeight(u),
+        accuracyBonus: u.stats.accuracyBonus,
+        suppression: u.suppression,
+        menFactor: w.scalesWithMen ? u.men / Math.max(1, u.stats.crew) : 1,
+        unit: u,
+        building: null,
+      },
+      w,
+      t,
+      p,
+      moving,
+    );
+  }
+
+  private shoot(src: ShotSource, w: WeaponDef, t: TargetRef, p: { x: number; z: number }, moving: boolean): void {
+    const d = dist(src.x, src.z, p.x, p.z);
+    const fromY = src.y;
     let toY = bHeight(this.terrain, p.x, p.z) + 1.2;
-    let hitChance = w.accuracy * (1 + u.stats.accuracyBonus);
+    let hitChance = w.accuracy * (1 + src.accuracyBonus);
     hitChance *= 1 - 0.45 * Math.pow(Math.min(1, d / w.range), 2);
     if (moving) hitChance *= w.movingAccuracy;
-    hitChance *= 1 - 0.5 * u.suppression;
+    hitChance *= 1 - 0.5 * src.suppression;
     const heightAdv = fromY - toY;
     if (heightAdv > 6) hitChance *= 1.12;
     let target: BUnit | undefined;
@@ -897,7 +1029,8 @@ export class BattleSim {
       if (target.stats.family === 'tank') hitChance *= 1.15;
       if (target.stats.family === 'light_vehicle' && target.speedNow > 6) hitChance *= 0.72;
     } else {
-      hitChance = Math.min(0.95, hitChance * 1.6);
+      const b = this.buildingById(t.id);
+      hitChance = Math.min(0.95, hitChance * 1.6) * (b ? (BUILDINGS[b.spec.typeId].defense?.profile ?? 1) : 1);
     }
     const hit = this.rng.next() < clamp(hitChance, 0.03, 0.95);
     const travel = d / w.projectileSpeed;
@@ -910,11 +1043,11 @@ export class BattleSim {
     }
     this.events.push({
       type: 'shot',
-      shooter: u.id,
+      shooter: src.id,
       weapon: w.weaponClass,
-      fromX: u.x,
+      fromX: src.x,
       fromY,
-      fromZ: u.z,
+      fromZ: src.z,
       toX: tx,
       toY: hit ? toY : bHeight(this.terrain, tx, tz) + 0.3,
       toZ: tz,
@@ -937,8 +1070,16 @@ export class BattleSim {
     if (t.kind === 'building') {
       if (!hit) return;
       const b = this.buildingById(t.id)!;
-      const dmg = w.damage * w.vsStructure * (w.scalesWithMen ? u.men / Math.max(1, u.stats.crew) : 1);
-      this.damageBuilding(b, dmg);
+      const fort = BUILDINGS[b.spec.typeId].defense;
+      this.damageBuilding(b, w.damage * w.vsStructure * src.menFactor * (1 - (fort?.armor ?? 0)));
+      // hits can kill the crew of a manned position (blast, or small arms through an open gun pit)
+      if (fort && b.defense && b.defense.crew > 0 && !b.destroyed) {
+        const pKill = heavy ? fort.exposure * 0.5 : w.vsInfantry >= 0.5 ? (fort.exposure * w.damage * w.vsInfantry * src.menFactor) / 60 : 0;
+        if (pKill > 0 && this.rng.next() < pKill) {
+          b.defense.crew--;
+          this.events.push({ type: 'casualty', id: b.id, x: b.x, z: b.z });
+        }
+      }
       return;
     }
     if (!target) return;
@@ -947,17 +1088,98 @@ export class BattleSim {
       target.suppression = Math.min(1, target.suppression + w.suppression * (hit ? 1 : 0.5) * (1 - target.cover));
     }
     if (!hit) return;
-    let dmg = w.damage * (w.scalesWithMen ? u.men / Math.max(1, u.stats.crew) : 1);
+    let dmg = w.damage * src.menFactor;
     if (target.stats.isVehicle) {
       // directional armour: front 100%, side 55%, rear 35%
-      const incoming = Math.atan2(u.x - target.x, u.z - target.z);
+      const incoming = Math.atan2(src.x - target.x, src.z - target.z);
       const rel = Math.abs(angleDiff(target.heading, incoming));
       const armorMul = rel < Math.PI / 4 ? 1 : rel < (3 * Math.PI) / 4 ? 0.55 : 0.35;
       dmg *= penetrationFactor(w.penetration, target.stats.armor * armorMul);
     } else {
       dmg *= w.vsInfantry * (1 - target.cover);
     }
-    this.damageUnit(target, dmg, u);
+    const wasAlive = target.alive;
+    this.damageUnit(target, dmg, src.unit);
+    if (wasAlive && !target.alive && src.building?.defense) src.building.defense.kills++;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Defensive structures
+  // ---------------------------------------------------------------------------
+
+  private acquireForDefense(b: BBuilding): TargetRef | null {
+    const d = b.defense!;
+    let best: TargetRef | null = null;
+    let bestScore = 0;
+    for (const e of this.units) {
+      if (e.side === b.side || !isActive(e) || !e.seenBy[b.side]) continue;
+      const dd = dist(b.x, b.z, e.x, e.z);
+      let eff = 0;
+      let range = 0;
+      for (const w of d.weapons) {
+        if (dd > w.range || !canHurtUnit(w, e)) continue;
+        range = Math.max(range, w.range);
+        const pen = penetrationFactor(w.penetration, e.stats.armor * 0.6);
+        eff += w.damage * w.rof * w.accuracy * pen * (e.stats.isVehicle ? 1 : w.vsInfantry);
+      }
+      if (eff <= 0.01) continue;
+      let score = (eff / Math.max(30, e.hp)) * (0.6 + e.stats.power / 300) * (1.4 - dd / (range * 1.6));
+      if (d.target && d.target.kind === 'unit' && d.target.id === e.id) score *= 1.35;
+      if (score > bestScore) {
+        if (!bLineOfSight(this.terrain, b.x, b.z, d.eyeHeight + 1, e.x, e.z, eyeHeight(e) * 0.7)) continue;
+        bestScore = score;
+        best = { kind: 'unit', id: e.id };
+      }
+    }
+    return best;
+  }
+
+  private updateDefense(b: BBuilding, dt: number): void {
+    const d = b.defense!;
+    if (this.time >= d.nextAcquire) {
+      d.nextAcquire = this.time + ACQUIRE_INTERVAL;
+      d.target = this.acquireForDefense(b);
+    }
+    const target = d.target && d.target.kind === 'unit' ? this.unitById(d.target.id) : undefined;
+    if (!target || !isActive(target)) {
+      d.target = null;
+      for (let k = 0; k < d.weapons.length; k++) d.weaponCd[k] = Math.max(0, d.weaponCd[k] - dt);
+      return;
+    }
+    const bearing = Math.atan2(target.x - b.x, target.z - b.z);
+    d.turret = approachAngle(d.turret, bearing, d.traverse * dt);
+    const range = dist(b.x, b.z, target.x, target.z);
+    for (let k = 0; k < d.weapons.length; k++) {
+      d.weaponCd[k] -= dt;
+      if (d.weaponCd[k] > 0) continue;
+      const w = d.weapons[k];
+      if (d.ammo < w.ammoPerShot || range > w.range || !canHurtUnit(w, target)) continue;
+      // the weapon must be laid on the target first
+      if (Math.abs(angleDiff(d.turret, bearing)) > 0.12) {
+        d.weaponCd[k] = 0.1;
+        continue;
+      }
+      d.weaponCd[k] = (1 / w.rof) * this.rng.range(0.85, 1.15);
+      d.ammo -= w.ammoPerShot;
+      d.lastFired = this.time;
+      this.shoot(
+        {
+          id: b.id,
+          x: b.x,
+          z: b.z,
+          y: bHeight(this.terrain, b.x, b.z) + d.eyeHeight,
+          accuracyBonus: 0.1,
+          suppression: 0,
+          menFactor: d.crew / d.crewMax,
+          unit: null,
+          building: b,
+        },
+        w,
+        { kind: 'unit', id: target.id },
+        { x: target.x, z: target.z },
+        false,
+      );
+    }
   }
 
   damageUnit(target: BUnit, dmg: number, from: BUnit | null): void {
@@ -1038,8 +1260,14 @@ export class BattleSim {
         }
         if (!seen) {
           for (const b of posts) {
-            const r = 150 * conceal;
-            if (dist(b.x, b.z, e.x, e.z) <= r) {
+            const d = dist(b.x, b.z, e.x, e.z);
+            if (d <= 150 * conceal) {
+              seen = true;
+              break;
+            }
+            // manned defences keep a lookout with optics
+            const def = b.defense;
+            if (def && def.crew > 0 && d <= def.vision * conceal && bLineOfSight(this.terrain, b.x, b.z, def.eyeHeight + 1, e.x, e.z, eyeHeight(e))) {
               seen = true;
               break;
             }
@@ -1055,7 +1283,10 @@ export class BattleSim {
   // ---------------------------------------------------------------------------
 
   private remaining(side: SideIndex): number {
-    return this.units.filter((u) => u.side === side && u.alive && !u.retreated).length;
+    let n = this.units.filter((u) => u.side === side && u.alive && !u.retreated).length;
+    // a defended objective is not taken while its armed positions hold out
+    if (side === 1 && this.setup.kind !== 'field') n += this.buildings.filter((b) => b.side === 1 && isArmed(b)).length;
+    return n;
   }
 
   private checkEnd(): void {
@@ -1084,7 +1315,8 @@ export class BattleSim {
       // Siege at nightfall: whoever holds the objective area keeps it.
       const objective = this.objectivePoint();
       const near = (side: SideIndex): number =>
-        this.units.filter((u) => u.side === side && u.alive && !u.retreated && !u.reserve && dist(u.x, u.z, objective.x, objective.z) < 170).length;
+        this.units.filter((u) => u.side === side && u.alive && !u.retreated && !u.reserve && dist(u.x, u.z, objective.x, objective.z) < 170).length +
+        this.buildings.filter((b) => b.side === side && isArmed(b) && dist(b.x, b.z, objective.x, objective.z) < 170).length;
       this.finish(near(0) > 0 && near(1) === 0 ? 0 : 1, 'timeout');
     }
   }
@@ -1189,7 +1421,13 @@ export class BattleSim {
     });
     const buildings = this.buildings.map((b) => {
       if (b.destroyed && b.spec.state !== 'destroyed') sides[b.side].buildingsLost++;
-      return { campaignId: b.spec.campaignId, hp: Math.max(0, b.hp), destroyed: b.destroyed };
+      const d = b.defense;
+      const ammoSpent = d ? Math.max(0, d.ammoStart - d.ammo) : 0;
+      sides[b.side].ammoSpent += ammoSpent;
+      // crew killed at their post, plus those caught when the position was destroyed (some get out)
+      const crewLost = d ? d.crewStart - d.crew + (b.destroyed ? d.crew - Math.round(d.crew * crewRng.range(0, 0.5)) : 0) : 0;
+      sides[b.side].menKilled += crewLost;
+      return { campaignId: b.spec.campaignId, hp: Math.max(0, b.hp), destroyed: b.destroyed, ammoSpent, crewLost };
     });
     return {
       battleId: this.setup.id,

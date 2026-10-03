@@ -3,6 +3,8 @@ import { GAME_INFO } from '../config/gameInfo';
 import { randomSeed } from '../core/rng';
 import { createCampaign, worldForState } from '../campaign/newCampaign';
 import { createUnit } from '../campaign/units';
+import { makeBuilding, suggestPlacement } from '../campaign/construction';
+import { BUILDINGS, type BuildingTypeId } from '../data/buildings';
 import type { CampaignState } from '../campaign/types';
 import type { World } from '../world/world';
 import type { BattleResult, BattleSetup } from '../battle/types';
@@ -361,6 +363,33 @@ function debugContact(app: App, kind: 'field' | 'base_assault'): boolean {
   return true;
 }
 
+/**
+ * Instantly add finished, crewed defences to the player's base on the side
+ * facing the enemy (debug/testing aid). Returns the number placed.
+ */
+function debugFortify(app: App, types: BuildingTypeId[] = ['bunker', 'at_emplacement']): number {
+  const c = app.campaign;
+  if (!c) return 0;
+  const s = c.state;
+  const home = Object.values(s.bases).find((b) => b.factionId === s.playerFactionId);
+  const enemyBase = Object.values(s.bases).find((b) => b.factionId !== s.playerFactionId);
+  if (!home) return 0;
+  const toward = enemyBase ? Math.atan2(enemyBase.z - home.z, enemyBase.x - home.x) : 0;
+  let n = 0;
+  types.forEach((t, k) => {
+    const a = toward + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * 0.5;
+    const r = home.radius - 1.6;
+    const spot = suggestPlacement(s, c.world, home, t, home.x + Math.cos(a) * r, home.z + Math.sin(a) * r);
+    if (!spot) return;
+    const b = makeBuilding(s, t, home, spot.x, spot.z, Math.atan2(spot.x - home.x, spot.z - home.z), null, true);
+    b.workers = BUILDINGS[t].workers;
+    s.buildings[b.id] = b;
+    n++;
+  });
+  home.stock.ammo = Math.max(home.stock.ammo, 80);
+  return n;
+}
+
 /** Expose a small debug/test API on window (used by the Playwright smoke test). */
 export function exposeDebug(app: App): void {
   (window as unknown as { __PX: unknown }).__PX = {
@@ -369,5 +398,6 @@ export function exposeDebug(app: App): void {
     state: () => app.campaign?.state ?? null,
     battle: () => app.battle?.sim ?? null,
     debugContact: (kind: 'field' | 'base_assault' = 'field') => debugContact(app, kind),
+    debugFortify: (types?: BuildingTypeId[]) => debugFortify(app, types),
   };
 }

@@ -11,6 +11,7 @@ import { basesOf, isOutpost, relationOf } from '../campaign/queries';
 import type { Army, Base, Building, BuildingStatus, CampaignState, LogEntry, PendingBattle, UnitInstance } from '../campaign/types';
 import { FOOD_PER_PERSON_HOUR } from '../economy/economy';
 import { statsOf } from '../units/stats';
+import { defenseStatsOf } from '../units/defense';
 import { bar, btn, clear, el, fmt, ICONS, iconBtn, signed } from './dom';
 import { openModal, Toasts } from './screens';
 
@@ -693,7 +694,7 @@ export class CampaignHud {
       card.append(
         el('div', { class: 'bn', text: def.name }),
         el('div', { class: 'bc', text: costLine(def.cost) }),
-        el('div', { class: 'bc', text: `${def.workers} workers · ${formatDuration(def.buildHours)}${def.energyUse ? ` · ${def.energyUse} MW` : def.energyOutput ? ` · +${def.energyOutput} MW` : ''}` }),
+        el('div', { class: 'bc', text: `${def.workers} ${def.defense ? 'crew' : 'workers'} · ${formatDuration(def.buildHours)}${def.energyUse ? ` · ${def.energyUse} MW` : def.energyOutput ? ` · +${def.energyOutput} MW` : ''}` }),
         el('div', { class: `bc ${can.ok ? '' : 'bad'}`, text: t === 'extractor' ? 'Tap a resource site on the map' : can.ok ? def.description.split('.')[0] : can.reason }),
       );
       card.addEventListener('click', () => {
@@ -780,6 +781,21 @@ export class CampaignHud {
           );
           if (active) r.append(bar(x.cycleProgress / rr.cycleHours, 'ok'));
         }
+      }
+      const ds = defenseStatsOf(x.typeId);
+      if (ds) {
+        const r = this.section(body, 'Defensive position');
+        const crewRows: [string, string, string?][] = ds.weapons.map((w) => [w.name, `${Math.round(w.range)} m${w.antiVehicleOnly ? ' · vehicles only' : ''}`]);
+        crewRows.push(['Crew on duty', `${x.workers} / ${ds.crew}`, x.workers < ds.crew ? 'warn' : '']);
+        crewRows.push(['Ammunition', `${ds.ammoCapacity} rds from base stock (${fmt(base?.stock.ammo ?? 0)} available)`, (base?.stock.ammo ?? 0) < ds.ammoCapacity ? 'warn' : '']);
+        crewRows.push(['Observation', `${ds.vision} m`]);
+        this.kv(r, crewRows);
+        r.append(
+          el('div', {
+            class: 'hint',
+            text: 'Fights automatically when this base is attacked. Needs its full crew and base ammunition; destroyed positions lose part of their crew.',
+          }),
+        );
       }
       if (def.extraction && site) {
         const ex = def.extraction[site.kind];

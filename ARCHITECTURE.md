@@ -27,6 +27,7 @@ src/config/gameInfo.ts      title / version (single place to rename the game)
 src/core/                   rng (mulberry32), simplex noise, math, time formatting, event emitter
 src/data/                   resources, buildings (+recipes), components, unit designs, factions, lore
 src/units/stats.ts          derive UnitStats from a design's components (cached)
+src/units/defense.ts        derive DefenseStats (weapons, power, vision) for defensive building types
 src/world/
   terrain.ts                heightfield + biomes (pure data), sampling helpers
   mapgen.ts                 base/site placement
@@ -81,7 +82,9 @@ BattleResult ─► applyBattleResult(ctx) ─► CampaignState (units, building
 - Units: every campaign `UnitInstance` becomes a `BattleUnitSpec` (with origin: army id or base garrison)
   and comes back as a `BattleUnitResult` (hp, men, ammo, fuel, status).
 - Buildings: every campaign building inside the 800 m battlefield becomes a `BattleBuildingSpec` placed
-  at `400 + (x − cx) × 20` m; results write hp/destroyed back by campaign id.
+  at `400 + (x − cx) × 20` m; results write hp/destroyed back by campaign id. Defensive types also carry
+  `crew` (the building's assigned workers) and `ammo` (their share of the base AMMO stock); the result
+  reports `ammoSpent` and `crewLost`, which come off the owning base's stock and population.
 - Terrain: battle heights/forests/water sample the strategic terrain around the contact point.
 - Time: `campaignHours = battleSeconds × BATTLE_TIME_SCALE / 3600`.
 This mapping is generic: new building types or unit designs need no battle-specific code.
@@ -123,6 +126,9 @@ Vite production build (`base` = `/<repo>/` on GitHub Actions, `/` locally, `VITE
 ## Extension recipes
 - **New building**: add to `BuildingTypeId` + `BUILDINGS` (`data/buildings.ts`), a model case in
   `rendering/models/buildings.ts`, optionally AI build rules. Battles pick it up automatically.
+- **New defensive structure**: as above plus a `defense` block (weapon ids from `data/components.ts`,
+  vision, ammo capacity, armour/profile/exposure); a traversing gun needs a case in `buildDefenseTurret`.
+  The battle sim, AI targeting, base strength and HUD read everything from the data.
 - **New unit**: add components to `data/components.ts` and a design to `data/unitDesigns.ts` (`producedAt`).
   For a new chassis visual, add a model and handle it in `BattleView` / `CampaignView.makeArmy`.
 - **New faction**: add a `FactionDef` in `data/factions.ts` and wire it in `newCampaign.ts`.

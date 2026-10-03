@@ -1,6 +1,6 @@
 import type * as THREE from 'three';
 import type { BuildingTypeId, SiteKind } from '../../data/buildings';
-import { buildBuildingModel, buildRubble, buildScaffold } from './buildings';
+import { buildBuildingModel, buildDefenseTurret, buildRubble, buildScaffold } from './buildings';
 import {
   buildBroadleaf,
   buildBroadleafLow,
@@ -34,8 +34,17 @@ export const Models = {
   tankHull: (tint: string) => get(`tankHull:${tint}`, () => buildTankHull(tint)),
   tankTurret: (tint: string) => get(`tankTurret:${tint}`, () => buildTankTurret(tint)),
   truck: (tint: string) => get(`truck:${tint}`, () => buildTruck(tint)),
-  building: (typeId: BuildingTypeId, accent: string, siteKind: SiteKind | null) =>
-    get(`b:${typeId}:${accent}:${siteKind ?? ''}`, () => buildBuildingModel(typeId, { accent, siteKind })),
+  building: (typeId: BuildingTypeId, accent: string, siteKind: SiteKind | null, noTurret = false) =>
+    get(`b:${typeId}:${accent}:${siteKind ?? ''}:${noTurret ? 'nt' : ''}`, () => buildBuildingModel(typeId, { accent, siteKind, noTurret })),
+  defenseTurret: (typeId: BuildingTypeId) => {
+    const key = `dt:${typeId}`;
+    if (!cache.has(key)) {
+      const g = buildDefenseTurret(typeId);
+      if (!g) return null;
+      cache.set(key, g);
+    }
+    return cache.get(key)!;
+  },
   scaffold: (radius: number) => get(`scaffold:${Math.round(radius)}`, () => buildScaffold(radius)),
   rubble: (radius: number, seed: number) => get(`rubble:${Math.round(radius)}:${seed % 4}`, () => buildRubble(radius, (seed % 4) + 1)),
   conifer: () => get('conifer', buildConifer),

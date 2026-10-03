@@ -20,10 +20,15 @@ const RUST = 0x8a5a3c;
 const SAND = 0x9a8862;
 const GREENHOUSE = 0x9cc9a8;
 const ROCK = 0x6e6b63;
+const OLIVE = 0x5c6648;
+const OLIVE_D = 0x46503a;
+const EARTH = 0x6f6248;
 
 export interface BuildingModelOpts {
   accent: THREE.ColorRepresentation;
   siteKind?: SiteKind | null;
+  /** Leave out the traversing gun (rendered separately in battles). */
+  noTurret?: boolean;
 }
 
 function hq(b: ModelBuilder, accent: THREE.ColorRepresentation): void {
@@ -219,6 +224,72 @@ function vehicleDepot(b: ModelBuilder, accent: THREE.ColorRepresentation): void 
   b.tube(1.6, 7, 10, WHITE, { x: 15, y: 1.9, z: -3.5 });
 }
 
+function bunker(b: ModelBuilder, accent: THREE.ColorRepresentation): void {
+  b.box(13, 0.25, 11, EARTH);
+  // earth berm around the casemate
+  b.prism(
+    [
+      [-6, 0],
+      [6, 0],
+      [4.6, 1.9],
+      [-4.6, 1.9],
+    ],
+    9,
+    EARTH,
+    { y: 0.25 },
+  );
+  b.box(8, 2.6, 6.4, CONCRETE, { y: 0.25 });
+  b.box(8.6, 0.55, 7, CONCRETE_D, { y: 2.85 });
+  b.box(8.7, 0.25, 7.1, accent, { y: 3.4 });
+  // firing slit and twin MG barrels facing +z
+  b.box(5.2, 0.55, 0.3, DARK, { y: 1.55, z: 3.15 });
+  for (const x of [-0.7, 0.7]) b.tube(0.07, 1.3, 5, METAL_D, { x, y: 1.8, z: 3.75, ry: Math.PI / 2 });
+  // camouflage net and periscope
+  b.box(5, 0.12, 4, OLIVE, { y: 3.65, x: -1, rz: 0.04 });
+  b.cyl(0.12, 0.12, 0.9, 5, METAL, { x: 2.5, y: 3.65, z: -1.5 });
+  // rear entrance with sandbags
+  b.box(1.4, 1.9, 0.3, DARK, { y: 0.25, z: -3.25 });
+  for (const x of [-1.6, 1.6]) b.box(1.4, 0.9, 0.8, SAND, { x, y: 0.25, z: -4 });
+}
+
+function atGun(b: ModelBuilder): void {
+  // facing +z, pivot at the origin
+  for (const x of [-1, 1]) b.cyl(0.45, 0.45, 0.28, 8, DARK, { x, y: 0.45, z: -0.1, rz: Math.PI / 2 });
+  b.box(2.1, 0.25, 0.5, OLIVE_D, { y: 0.35, z: -0.1 });
+  b.box(0.2, 0.2, 2.8, OLIVE_D, { x: -0.55, y: 0.18, z: -1.6, ry: -0.22 });
+  b.box(0.2, 0.2, 2.8, OLIVE_D, { x: 0.55, y: 0.18, z: -1.6, ry: 0.22 });
+  b.box(2.5, 1.35, 0.12, OLIVE, { y: 0.55, z: 0.45, rx: -0.12 });
+  b.box(0.55, 0.5, 1.9, OLIVE_D, { y: 0.9, z: 0.1 });
+  b.tube(0.11, 4.4, 6, METAL_D, { y: 1.15, z: 2.9, ry: Math.PI / 2 });
+  b.box(0.34, 0.28, 0.45, METAL_D, { y: 1.01, z: 5.1 });
+}
+
+function atEmplacement(b: ModelBuilder, accent: THREE.ColorRepresentation, withGun: boolean): void {
+  b.box(11, 0.22, 11, EARTH);
+  // sandbag ring, open at the rear
+  for (let k = 0; k < 12; k++) {
+    const a = (k / 12) * Math.PI * 2;
+    if (Math.abs(Math.sin(a) + 1) < 0.35) continue; // gap toward -z
+    b.box(2.4, 0.95, 1, k % 2 ? SAND : 0x8d7c58, { x: Math.cos(a) * 4.3, y: 0.22, z: Math.sin(a) * 4.3, ry: -a + Math.PI / 2 });
+  }
+  // ready-ammunition crates and a marker pole
+  for (const [x, z] of [
+    [-2.4, -2.8],
+    [-1.6, -3.1],
+  ] as const) b.box(0.8, 0.45, 0.5, OLIVE, { x, y: 0.22, z });
+  b.cyl(0.07, 0.07, 3, 4, METAL, { x: 3.2, y: 0.22, z: -3 });
+  b.box(0.07, 0.6, 0.9, accent, { x: 3.2, y: 2.6, z: -2.55 });
+  if (withGun) atGun(b);
+}
+
+/** The traversing gun of a defensive emplacement (null if the type has none). */
+export function buildDefenseTurret(typeId: BuildingTypeId): THREE.BufferGeometry | null {
+  if (typeId !== 'at_emplacement') return null;
+  const b = new ModelBuilder();
+  atGun(b);
+  return b.build();
+}
+
 /** Build the full-detail model for a building type. */
 export function buildBuildingModel(typeId: BuildingTypeId, opts: BuildingModelOpts): THREE.BufferGeometry {
   const b = new ModelBuilder();
@@ -251,6 +322,12 @@ export function buildBuildingModel(typeId: BuildingTypeId, opts: BuildingModelOp
       break;
     case 'vehicle_depot':
       vehicleDepot(b, a);
+      break;
+    case 'bunker':
+      bunker(b, a);
+      break;
+    case 'at_emplacement':
+      atEmplacement(b, a, !opts.noTurret);
       break;
   }
   return b.build();

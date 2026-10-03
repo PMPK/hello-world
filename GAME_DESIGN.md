@@ -122,12 +122,24 @@ Rules:
 | Industrial Factory | 60 ORE · 40 ALY | 36h | 7 | 1400 | −10 MW | 2 ALY → 2 CMP, or 1 ALY + 1 HYD → 5 AMMO per 1.5h |
 | Barracks | 40 ORE · 20 ALY | 24h | 3 | 1000 | −3 MW | trains rifle squads |
 | Vehicle Depot | 80 ORE · 60 ALY · 20 CMP | 48h | 6 | 1800 | −8 MW | builds jeeps and tanks |
+| MG Bunker | 35 ORE · 30 ALY | 16h | 3 crew | 1800 | 0 | twin 12.7 mm MG (215 m), 30 rds, concrete (−60% structural damage) |
+| AT Gun Emplacement | 25 ORE · 35 ALY · 12 CMP | 20h | 4 crew | 1300 | 0 | 90 mm AT gun (285 m, vehicles only), 16 rds, hard to hit, crew exposed |
 
 Construction pays the full cost up front; cancelling refunds 75%. Destroyed buildings stay as ruins and
 can be rebuilt for 60% of the cost. Buildings below 50% HP work at reduced efficiency; *Repair* consumes
 alloys over time. The refinery and factory can be set to *Auto* or a fixed recipe.
 
 Extractors and refinery cost no alloys on purpose: an expedition can always restart its economy from ore.
+
+**Defensive structures** (`defense` block in `src/data/buildings.ts`, stats derived in `src/units/defense.ts`)
+fight automatically whenever their base is part of a battle. Their workers are their **crew** (crewed with
+high priority); without a crew they are silent. When a battle starts each crewed position draws up to its
+ammunition capacity from the base's AMMO stock (shared evenly); what it fires is deducted afterwards and
+crew killed at their post or in a destroyed position are lost from the population. The bunker shreds
+infantry and jeeps and only tank guns or massed AT rockets crack it; the dug-in AT gun out-ranges tank
+guns and is hard to hit but cannot engage infantry, and its exposed crew can be shot down by small arms.
+Armed positions count towards base strength for AI planning, and a base is not taken while any of them
+still fights.
 
 ### 4.5 Military units (modular)
 
@@ -182,7 +194,10 @@ ground and other vehicles but are half-blind and vulnerable to infantry in cover
   and degrades infantry.
 - **Ammo and fuel** are tracked per unit and written back to the campaign.
 - **Structures** take damage (explicit orders, AI demolition of military production in sieges, and stray
-  heavy rounds) and can be destroyed.
+  heavy rounds) and can be destroyed. **Defensive positions** acquire targets, traverse and fire on their
+  own, are engaged automatically by enemy units that can hurt them (armour, target profile and crew
+  exposure decide which weapons can), spot with optics and line of sight, and are marked on the overlay
+  (MG NEST / AT GUN, condition, our ammunition; SILENT when out of crew or ammo).
 - **End**: a side is eliminated or withdraws; timeouts (15 min) — field battles draw, sieges go to whoever
   holds the objective area. The player can withdraw (engaged units may be caught) or end a won battle.
 
@@ -192,13 +207,16 @@ tanks seek high ground at stand-off range and back away from infantry that could
 infantry advance through cover and ambush vehicles; a flanking group swings around known enemy
 concentrations; focus fire on the most dangerous / most damaged targets it can hurt; damaged and dry
 units fall back; holds and waits when outmatched; withdraws when the fight is lost. Siege defenders hold
-around their buildings and counter-attack when clearly superior.
+around their buildings and counter-attack when clearly superior. Enemy defences are always known: tanks
+shell bunkers (then gun pits), infantry rush exposed AT gun pits that cannot fire back at them, AT-armed
+infantry take on bunkers only when no tanks are left, and jeeps keep clear of fortifications.
 
 ## 6. Strategic AI (`src/ai/strategicAI.ts`)
 Build order driven by needs (housing, food, refinery, oil, power, industry, depot, barracks, more
-extractors), staffing-aware; recruits within manpower limits; keeps a home guard; launches raids on
-outposts and assaults on bases when its strike force is strong enough **and has the fuel to get there**;
-recalls forces to defend; beaten or dry forces return home to refit.
+extractors), staffing-aware; fortifies (bunker, then AT gun) on the side facing the enemy once tension
+is high or hostilities begin; recruits within manpower limits; keeps a home guard; launches raids on
+outposts and assaults on bases when its strike force is strong enough (garrison **and** defences
+counted) **and has the fuel to get there**; recalls forces to defend; beaten or dry forces return home to refit.
 
 ## 7. Persistence
 Versioned save envelope + state schema version with migrations, IndexedDB (localStorage fallback),

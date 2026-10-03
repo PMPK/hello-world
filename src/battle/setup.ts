@@ -1,5 +1,6 @@
 import { dist } from '../core/math';
 import { BUILDINGS } from '../data/buildings';
+import { defenseStatsOf } from '../units/defense';
 import { FACTION_DEFS } from '../data/factions';
 import type { CampaignState, PendingBattle, UnitInstance } from '../campaign/types';
 import { BIOME_NAMES, biomeAt } from '../world/terrain';
@@ -109,11 +110,24 @@ export function createBattleSetup(state: CampaignState, world: World, p: Pending
 
   // Buildings inside the battlefield (both factions).
   const half = BATTLE_SIZE / 2 / BATTLE_POS_SCALE - 1;
+  const inField = Object.values(state.buildings).filter((b) => Math.abs(b.x - cx) <= half && Math.abs(b.z - cz) <= half);
+  // Crewed defences draw their ammunition from their base's stock, shared evenly.
+  const defenders = new Map<string, number>();
+  for (const b of inField) {
+    if (b.state === 'active' && b.workers > 0 && defenseStatsOf(b.typeId)) defenders.set(b.baseId, (defenders.get(b.baseId) ?? 0) + 1);
+  }
   const buildings: BattleBuildingSpec[] = [];
-  for (const b of Object.values(state.buildings)) {
-    if (Math.abs(b.x - cx) > half || Math.abs(b.z - cz) > half) continue;
+  for (const b of inField) {
     const pos = campaignToBattle(cx, cz, b.x, b.z);
     const side: SideIndex = b.factionId === p.attackerFactionId ? 0 : 1;
+    const ds = defenseStatsOf(b.typeId);
+    let crew: number | undefined;
+    let ammo: number | undefined;
+    if (ds && b.state === 'active') {
+      crew = Math.min(ds.crew, b.workers);
+      const stock = state.bases[b.baseId]?.stock.ammo ?? 0;
+      ammo = crew > 0 ? Math.min(ds.ammoCapacity, stock / Math.max(1, defenders.get(b.baseId) ?? 1)) : 0;
+    }
     buildings.push({
       campaignId: b.id,
       typeId: b.typeId,
@@ -126,6 +140,8 @@ export function createBattleSetup(state: CampaignState, world: World, p: Pending
       hp: b.state === 'destroyed' ? 0 : b.hp,
       maxHp: BUILDINGS[b.typeId].maxHp,
       state: b.state,
+      crew,
+      ammo,
     });
   }
 

@@ -9,7 +9,9 @@ export type BuildingTypeId =
   | 'refinery'
   | 'factory'
   | 'barracks'
-  | 'vehicle_depot';
+  | 'vehicle_depot'
+  | 'bunker'
+  | 'at_emplacement';
 
 export type SiteKind = 'minerals' | 'hydrocarbons';
 
@@ -22,12 +24,32 @@ export interface RecipeDef {
   cycleHours: number;
 }
 
+/** Fixed weapon position that fights in tactical battles (crewed from the workforce). */
+export interface DefenseDef {
+  /** Weapon component ids (see data/components.ts). */
+  weapons: string[];
+  /** Spotting range in metres (with line of sight). */
+  vision: number;
+  /** Muzzle / observer height above ground (metres). */
+  eyeHeight: number;
+  /** Rounds held at the position; filled from the base's ammunition stock when a battle starts. */
+  ammoCapacity: number;
+  /** The gun traverses on a separate mount (rendered as a turret). */
+  turret: boolean;
+  /** Fraction of structural damage absorbed (reinforced concrete). */
+  armor: number;
+  /** Hit-chance multiplier for incoming fire (small, dug-in positions are hard to hit). */
+  profile: number;
+  /** 0..1: how exposed the crew is to small arms and blast (open gun pits vs closed casemates). */
+  exposure: number;
+}
+
 export interface BuildingTypeDef {
   id: BuildingTypeId;
   name: string;
   short: string;
   description: string;
-  category: 'command' | 'housing' | 'power' | 'extraction' | 'industry' | 'military';
+  category: 'command' | 'housing' | 'power' | 'extraction' | 'industry' | 'military' | 'defense';
   cost: PartialStock;
   buildHours: number;
   /** Workers required for full efficiency. */
@@ -49,6 +71,8 @@ export interface BuildingTypeDef {
   extraction?: Record<SiteKind, { resource: 'minerals' | 'hydrocarbons'; perHour: number; name: string }>;
   /** Unit production capability. */
   produces?: 'infantry' | 'vehicles';
+  /** Defensive weapon position (bunkers, gun emplacements). Workers are its crew. */
+  defense?: DefenseDef;
   /** Must be placed on a resource site of one of these kinds. */
   requiresSite?: SiteKind[];
   /** Campaign-map footprint radius (map units). */
@@ -254,6 +278,64 @@ export const BUILDINGS: Record<BuildingTypeId, BuildingTypeDef> = {
     maxPerBase: 2,
     importance: 0.9,
     model: 'vehicle_depot',
+  },
+  bunker: {
+    id: 'bunker',
+    name: 'MG Bunker',
+    short: 'BNK',
+    description:
+      'Reinforced concrete casemate with twin heavy machine guns. Shreds infantry and light vehicles; only tank guns and massed AT rockets can crack it. Crewed by 3 and supplied from base ammunition.',
+    category: 'defense',
+    cost: { minerals: 35, refined: 30 },
+    buildHours: 16,
+    workers: 3,
+    maxHp: 1800,
+    energyUse: 0,
+    defense: {
+      weapons: ['bunker_mg'],
+      vision: 230,
+      eyeHeight: 1.6,
+      ammoCapacity: 30,
+      turret: false,
+      armor: 0.6,
+      profile: 0.9,
+      exposure: 0.1,
+    },
+    footprint: 0.7,
+    battleFootprint: 7,
+    buildable: true,
+    maxPerBase: 6,
+    importance: 0.55,
+    model: 'bunker',
+  },
+  at_emplacement: {
+    id: 'at_emplacement',
+    name: 'AT Gun Emplacement',
+    short: 'ATG',
+    description:
+      'Dug-in 90mm anti-tank gun on a traversing mount. Out-ranges tank guns and is hard to hit, but cannot engage infantry and its crew is exposed to small arms. Crewed by 4 and supplied from base ammunition.',
+    category: 'defense',
+    cost: { minerals: 25, refined: 35, components: 12 },
+    buildHours: 20,
+    workers: 4,
+    maxHp: 1300,
+    energyUse: 0,
+    defense: {
+      weapons: ['at_gun_90'],
+      vision: 260,
+      eyeHeight: 1.9,
+      ammoCapacity: 16,
+      turret: true,
+      armor: 0,
+      profile: 0.35,
+      exposure: 0.8,
+    },
+    footprint: 0.8,
+    battleFootprint: 8,
+    buildable: true,
+    maxPerBase: 4,
+    importance: 0.55,
+    model: 'at_emplacement',
   },
 };
 

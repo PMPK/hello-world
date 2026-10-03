@@ -2,7 +2,7 @@ import { clamp, dist } from '../core/math';
 import { BUILDINGS } from '../data/buildings';
 import type { BattleSim } from './sim';
 import { bBlocked, bForest, bHeight } from './terrain';
-import type { BUnit, SideIndex, TargetRef } from './types';
+import type { BBuilding, BUnit, SideIndex, TargetRef } from './types';
 
 interface Memory {
   x: number;
@@ -18,6 +18,13 @@ const THINK_INTERVAL = 1.0;
 
 function isActive(u: BUnit): boolean {
   return u.alive && !u.retreated && !u.reserve;
+}
+
+/** Standing, crewed defence with ammunition (mirrors sim.isArmed; kept local to avoid an import cycle). */
+function isArmed(b: BBuilding): boolean {
+  const d = b.defense;
+  if (!d || b.destroyed || d.crew <= 0) return false;
+  return d.weapons.some((w) => d.ammo >= w.ammoPerShot);
 }
 
 function centroid(list: { x: number; z: number }[]): { x: number; z: number } | null {
@@ -84,7 +91,8 @@ export class TacticalAI {
     if (!own.length) return;
     this.updateMemory();
 
-    const ownPower = own.reduce((a, u) => a + u.stats.power * (u.hp / Math.max(1, u.stats.maxHp)), 0);
+    // units plus our own armed defences (same measure as sim.startPower)
+    const ownPower = sim.sidePower(this.side);
     const known = [...this.memory.values()];
     const enemyPower = known.reduce((a, m) => a + m.power, 0);
     const start = sim.startPower[this.side] || 1;
@@ -134,6 +142,23 @@ export class TacticalAI {
         });
       }
     }
+    // enemy defensive positions are static and in plain sight
+    for (const b of sim.buildings) {
+      if (b.side === this.side || !b.defense) continue;
+      if (!isArmed(b)) {
+        this.memory.delete(b.id);
+        continue;
+      }
+      this.memory.set(b.id, {
+        x: b.x,
+        z: b.z,
+        t: sim.time,
+        power: b.defense.power * (b.hp / b.maxHp),
+        vehicle: true,
+        family: 'defense',
+        inForest: false,
+      });
+    }
     for (const [id, m] of this.memory) if (sim.time - m.t > 75) this.memory.delete(id);
   }
 
@@ -167,6 +192,46 @@ export class TacticalAI {
     if (u.order.type === 'attack' && u.order.target.kind === t.kind && u.order.target.id === t.id) return;
     this.sim.orderAttack([u.id], t);
     u.task = 'attack';
+  }
+
+  /**
+   * Knock out enemy defensive positions with the right tool: tanks shell
+   * bunkers (then gun pits), infantry rush exposed AT gun pits that cannot
+   * fire back at them, and AT-armed infantry take on bunkers only when no
+   * tanks are left.
+   */
+  private reduceDefenses(own: BUnit[]): void {
+    const sim = this.sim;
+    const forts = sim.buildings.filter((b) => b.side !== this.side && isArmed(b));
+    if (!forts.length) return;
+    const isAT = (b: BBuilding): boolean => b.defense!.weapons.some((w) => w.antiVehicleOnly);
+    const tanks = own.filter((u) => u.stats.family === 'tank' && u.task !== 'fall back' && u.order.type !== 'retreat');
+    const nearest = (u: BUnit, list: BBuilding[], maxD: number): BBuilding | undefined => {
+      let best: BBuilding | undefined;
+      let bd = maxD;
+      for (const b of list) {
+        const d = dist(u.x, u.z, b.x, b.z);
+        if (d < bd) {
+          bd = d;
+          best = b;
+        }
+      }
+      return best;
+    };
+    const bunkers = forts.filter((b) => !isAT(b));
+    const guns = forts.filter(isAT);
+    for (const u of own) {
+      if (u.order.type === 'retreat' || u.task === 'fall back') continue;
+      if (u.order.type === 'attack' && sim.targetValid(u, u.order.target)) continue;
+      let tgt: BBuilding | undefined;
+      if (u.stats.family === 'tank') tgt = nearest(u, bunkers, 380) ?? nearest(u, guns, 340);
+      else if (u.stats.family === 'infantry') {
+        tgt = nearest(u, guns, 250);
+        const hasAT = u.stats.weapons.some((w) => w.antiVehicleOnly && u.ammo >= w.ammoPerShot);
+        if (!tgt && !tanks.length && hasAT) tgt = nearest(u, bunkers, 230);
+      }
+      if (tgt) this.attack(u, { kind: 'building', id: tgt.id });
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -319,6 +384,7 @@ export class TacticalAI {
       const u = sim.unitById(id);
       if (!u || !isActive(u)) this.flankers.delete(id);
     }
+    if (!waiting) this.reduceDefenses(own);
 
     for (const u of own) {
       if (u.order.type === 'retreat' || u.task === 'fall back') continue;
@@ -417,7 +483,7 @@ export class TacticalAI {
     const sim = this.sim;
     let tankThreat = false;
     for (const m of this.memory.values()) {
-      if (m.family === 'tank' && dist(u.x, u.z, m.x, m.z) < 290) tankThreat = true;
+      if ((m.family === 'tank' || m.family === 'defense') && dist(u.x, u.z, m.x, m.z) < 290) tankThreat = true;
     }
     if (tankThreat) {
       this.moveTo(u, ownC.x - ux * 90, ownC.z - uz * 90, false, 40);
@@ -448,7 +514,7 @@ export class TacticalAI {
    * left standing so it can be captured.
    */
   private assaultBuildings(own: BUnit[], targets: { x: number; z: number; id: number; importance: number }[]): void {
-    const military = new Set(['barracks', 'vehicle_depot', 'factory']);
+    const military = new Set(['bunker', 'at_emplacement', 'barracks', 'vehicle_depot', 'factory']);
     const demolish = targets.filter((t) => {
       const b = this.sim.buildingById(t.id);
       return !!b && military.has(b.spec.typeId);

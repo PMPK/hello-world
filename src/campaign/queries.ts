@@ -1,6 +1,7 @@
 import { dist } from '../core/math';
 import { BUILDINGS } from '../data/buildings';
 import { statsOf } from '../units/stats';
+import { defenseStatsOf } from '../units/defense';
 import type { Army, Base, Building, CampaignState, Relation, UnitInstance } from './types';
 
 export function basesOf(state: CampaignState, factionId: string): Base[] {
@@ -75,8 +76,25 @@ export function armyStrength(a: Army): number {
   return strengthOf(a.units);
 }
 
+/**
+ * Combat value of a base's crewed defensive structures. Positions without
+ * ammunition in the base stock only count for a little (they can still be
+ * resupplied when a battle starts if ammunition arrives).
+ */
+export function defenseStrength(state: CampaignState, base: Base): number {
+  let s = 0;
+  for (const b of Object.values(state.buildings)) {
+    if (b.baseId !== base.id || b.state !== 'active') continue;
+    const ds = defenseStatsOf(b.typeId);
+    if (!ds || ds.crew <= 0) continue;
+    const crewF = Math.min(1, b.workers / ds.crew);
+    s += ds.power * (b.hp / ds.maxHp) * crewF;
+  }
+  return base.stock.ammo >= 1 ? s : s * 0.25;
+}
+
 export function garrisonStrength(state: CampaignState, base: Base): number {
-  let s = strengthOf(base.garrison);
+  let s = strengthOf(base.garrison) + defenseStrength(state, base);
   for (const a of Object.values(state.armies)) {
     if (a.factionId === base.factionId && dist(a.x, a.z, base.x, base.z) <= base.radius + 3) s += armyStrength(a);
   }

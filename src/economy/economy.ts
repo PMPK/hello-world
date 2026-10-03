@@ -32,6 +32,9 @@ const WORK_PRIORITY: Record<BuildingTypeId, number> = {
   hq: 0,
   power_plant: 1,
   farm: 2,
+  // defences are crewed ahead of industry: an unmanned bunker is useless when the attack comes
+  bunker: 2.5,
+  at_emplacement: 2.5,
   extractor: 3,
   refinery: 4,
   factory: 5,
@@ -296,6 +299,11 @@ export function stepBaseEconomy(ctx: SimContext, base: Base, dt: number): void {
         b.storage[ex.resource] = (b.storage[ex.resource] ?? 0) + amount;
         b.status = hpFactor(b) < 1 ? 'damaged' : 'ok';
       }
+      continue;
+    }
+
+    if (def.defense) {
+      b.status = s < 1 ? 'no_workers' : hpFactor(b) < 1 ? 'damaged' : 'ok';
       continue;
     }
 
