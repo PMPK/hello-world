@@ -1,0 +1,555 @@
+import { clamp, dist } from '../core/math';
+import { BUILDINGS } from '../data/buildings';
+import type { BattleSim } from './sim';
+import { bBlocked, bForest, bHeight } from './terrain';
+import type { BUnit, SideIndex, TargetRef } from './types';
+
+interface Memory {
+  x: number;
+  z: number;
+  t: number;
+  power: number;
+  vehicle: boolean;
+  family: string;
+  inForest: boolean;
+}
+
+const THINK_INTERVAL = 1.0;
+
+function isActive(u: BUnit): boolean {
+  return u.alive && !u.retreated && !u.reserve;
+}
+
+function centroid(list: { x: number; z: number }[]): { x: number; z: number } | null {
+  if (!list.length) return null;
+  let x = 0;
+  let z = 0;
+  for (const p of list) {
+    x += p.x;
+    z += p.z;
+  }
+  return { x: x / list.length, z: z / list.length };
+}
+
+/**
+ * Lightweight battlefield reasoning. Each side's AI:
+ *  - remembers enemies it has seen (fog of war is respected),
+ *  - picks an objective (enemy forces, base structures, or its own base to defend),
+ *  - scouts with jeeps, keeps tanks at standoff range on high ground and away
+ *    from infantry hiding in forests, moves infantry through cover,
+ *  - sends a flanking group around known enemy concentrations,
+ *  - focuses fire on the most valuable target it can actually hurt,
+ *  - pulls back damaged / dry units and withdraws when the fight is lost.
+ */
+export class TacticalAI {
+  private readonly sim: BattleSim;
+  readonly side: SideIndex;
+  private nextThink: number;
+  private memory = new Map<number, Memory>();
+  private flankers = new Set<number>();
+  private flankPoint: { x: number; z: number } | null = null;
+  private flankStarted = 0;
+  private retreating = false;
+  private mode: 'attack' | 'defend';
+  private holdSince = -1;
+  private contactAt = -1;
+
+  constructor(sim: BattleSim, side: SideIndex) {
+    this.sim = sim;
+    this.side = side;
+    this.nextThink = 0.4 + side * 0.5;
+    const siege = sim.setup.kind !== 'field';
+    // Field battles are meeting engagements: both sides manoeuvre. Siege defenders hold their base.
+    this.mode = side === 0 || !siege ? 'attack' : 'defend';
+  }
+
+  get enemySide(): SideIndex {
+    return this.side === 0 ? 1 : 0;
+  }
+
+  update(_dt: number): void {
+    if (this.sim.time < this.nextThink) return;
+    this.nextThink = this.sim.time + THINK_INTERVAL;
+    this.think();
+  }
+
+  // ---------------------------------------------------------------------------
+
+  private think(): void {
+    const sim = this.sim;
+    const own = sim.units.filter((u) => u.side === this.side && isActive(u));
+    if (!own.length) return;
+    this.updateMemory();
+
+    const ownPower = own.reduce((a, u) => a + u.stats.power * (u.hp / Math.max(1, u.stats.maxHp)), 0);
+    const known = [...this.memory.values()];
+    const enemyPower = known.reduce((a, m) => a + m.power, 0);
+    const start = sim.startPower[this.side] || 1;
+
+    // ---- Withdraw when the fight is clearly lost --------------------------
+    const allDry = own.every((u) => u.ammo < Math.min(...u.stats.weapons.map((w) => w.ammoPerShot)));
+    if (!this.retreating && ((ownPower < start * 0.3 && ownPower < enemyPower * 0.6) || allDry)) {
+      this.retreating = true;
+    }
+    if (this.retreating) {
+      sim.orderRetreat(own.filter((u) => u.order.type !== 'retreat').map((u) => u.id));
+      return;
+    }
+
+    if (known.length && this.contactAt < 0) this.contactAt = sim.time;
+
+    // ---- Defender may counter-attack when clearly superior ----------------
+    if (this.mode === 'defend' && known.length && ownPower > enemyPower * 1.7 && sim.time > 40) this.mode = 'attack';
+    // Field-battle defenders wait for contact, then fight.
+    if (this.mode === 'defend' && sim.setup.kind === 'field' && known.length && sim.time > 15) this.mode = 'attack';
+
+    this.assignFocus(own);
+    this.individualSurvival(own);
+
+    if (this.mode === 'attack') this.planAttack(own, ownPower);
+    else this.planDefense(own);
+  }
+
+  private updateMemory(): void {
+    const sim = this.sim;
+    for (const e of sim.units) {
+      if (e.side === this.side) continue;
+      if (!e.alive || e.retreated) {
+        this.memory.delete(e.id);
+        continue;
+      }
+      if (isActive(e) && e.seenBy[this.side]) {
+        this.memory.set(e.id, {
+          x: e.x,
+          z: e.z,
+          t: sim.time,
+          power: e.stats.power * (e.hp / Math.max(1, e.stats.maxHp)),
+          vehicle: e.stats.isVehicle,
+          family: e.stats.family,
+          inForest: e.inForest,
+        });
+      }
+    }
+    for (const [id, m] of this.memory) if (sim.time - m.t > 75) this.memory.delete(id);
+  }
+
+  private enemyBuildings(): { x: number; z: number; id: number; importance: number }[] {
+    return this.sim.buildings
+      .filter((b) => b.side !== this.side && !b.destroyed)
+      .map((b) => ({ x: b.x, z: b.z, id: b.id, importance: BUILDINGS[b.spec.typeId].importance }));
+  }
+
+  private ownBuildings(): { x: number; z: number; id: number; importance: number; radius: number }[] {
+    return this.sim.buildings
+      .filter((b) => b.side === this.side && !b.destroyed)
+      .map((b) => ({ x: b.x, z: b.z, id: b.id, importance: BUILDINGS[b.spec.typeId].importance, radius: b.radius }));
+  }
+
+  /** Issue a move only when it meaningfully changes what the unit is doing. */
+  private moveTo(u: BUnit, x: number, z: number, attackMove = true, tolerance = 22): void {
+    const o = u.order;
+    if (o.type === 'move' && dist(o.x, o.z, x, z) < tolerance && o.attackMove === attackMove) return;
+    if (o.type === 'attack' && this.sim.targetValid(u, o.target)) return; // finish the attack first
+    if (dist(u.x, u.z, x, z) < 8) {
+      if (o.type !== 'hold' && o.type !== 'idle') this.sim.orderStop([u.id]);
+      return;
+    }
+    const p = this.sim.freeSpot(x, z);
+    this.sim.orderMove([u.id], p.x, p.z, attackMove);
+    u.task = attackMove ? 'advance' : 'reposition';
+  }
+
+  private attack(u: BUnit, t: TargetRef): void {
+    if (u.order.type === 'attack' && u.order.target.kind === t.kind && u.order.target.id === t.id) return;
+    this.sim.orderAttack([u.id], t);
+    u.task = 'attack';
+  }
+
+  // ---------------------------------------------------------------------------
+  // Focus fire
+  // ---------------------------------------------------------------------------
+
+  private assignFocus(own: BUnit[]): void {
+    const sim = this.sim;
+    const visible = sim.units.filter((e) => e.side !== this.side && isActive(e) && e.seenBy[this.side]);
+    if (!visible.length) {
+      for (const u of own) if (u.focus?.kind === 'unit') u.focus = null;
+      return;
+    }
+    // Score targets by threat and how close they are to dying.
+    let best: BUnit | null = null;
+    let bestScore = -Infinity;
+    for (const e of visible) {
+      let threat = e.stats.power * (0.5 + 0.5 * (e.hp / e.stats.maxHp));
+      // AT teams near our tanks and spotting jeeps are priority
+      if (!e.stats.isVehicle && own.some((u) => u.stats.family === 'tank' && dist(u.x, u.z, e.x, e.z) < 140)) threat *= 1.6;
+      const fragility = 1 - e.hp / e.stats.maxHp;
+      const reach = own.filter((u) => dist(u.x, u.z, e.x, e.z) < sim.maxRange(u)).length;
+      const score = threat * (1 + fragility * 1.5) * (0.4 + reach * 0.25);
+      if (score > bestScore) {
+        bestScore = score;
+        best = e;
+      }
+    }
+    for (const u of own) {
+      if (best && sim.effectiveness(u, best) > 0.5 && dist(u.x, u.z, best.x, best.z) < sim.maxRange(u) * 1.1) {
+        u.focus = { kind: 'unit', id: best.id };
+      } else if (u.focus?.kind === 'unit') {
+        u.focus = null;
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Individual survival: damaged / dry units fall back, AT ambushes
+  // ---------------------------------------------------------------------------
+
+  private individualSurvival(own: BUnit[]): void {
+    const sim = this.sim;
+    const rear = sim.setup.sides[this.side].entry;
+    for (const u of own) {
+      const minShot = Math.min(...u.stats.weapons.map((w) => w.ammoPerShot));
+      if (u.ammo < minShot) {
+        if (u.order.type !== 'retreat') sim.orderRetreat([u.id]);
+        u.task = 'no ammo';
+        continue;
+      }
+      const hpF = u.hp / u.stats.maxHp;
+      if (u.stats.isVehicle && hpF < 0.28 && u.order.type !== 'retreat') {
+        // limp back toward our lines
+        this.moveTo(u, rear.x - rear.dirX * 40, rear.z - rear.dirZ * 40, false, 40);
+        u.task = 'fall back';
+      }
+    }
+    // Infantry with AT ambush enemy vehicles that come close.
+    for (const u of own) {
+      if (u.stats.isVehicle || u.order.type === 'retreat') continue;
+      const at = u.stats.weapons.find((w) => w.antiVehicleOnly);
+      if (!at || u.ammo < at.ammoPerShot) continue;
+      let tgt: BUnit | null = null;
+      let td = at.range * 1.3;
+      for (const e of sim.units) {
+        if (e.side === this.side || !isActive(e) || !e.seenBy[this.side] || !e.stats.isVehicle) continue;
+        const d = dist(u.x, u.z, e.x, e.z);
+        if (d < td) {
+          td = d;
+          tgt = e;
+        }
+      }
+      if (tgt) this.attack(u, { kind: 'unit', id: tgt.id });
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Attack
+  // ---------------------------------------------------------------------------
+
+  private planAttack(own: BUnit[], ownPower: number): void {
+    const sim = this.sim;
+    const known = [...this.memory.values()];
+    const ownC = centroid(own)!;
+    const enemyBuildings = this.enemyBuildings();
+    const enemyC = centroid(known);
+    let objective: { x: number; z: number };
+    if (enemyC) objective = enemyC;
+    else if (sim.setup.objectiveBuildingId && enemyBuildings.length) objective = centroid(enemyBuildings)!;
+    else if (enemyBuildings.length) objective = centroid(enemyBuildings)!;
+    else {
+      const e = sim.setup.sides[this.enemySide].entry;
+      objective = { x: e.x, z: e.z };
+    }
+    const axX = objective.x - ownC.x;
+    const axZ = objective.z - ownC.z;
+    const axL = Math.hypot(axX, axZ) || 1;
+    const ux = axX / axL;
+    const uz = axZ / axL;
+    const px = -uz;
+    const pz = ux;
+
+    const tanks = own.filter((u) => u.stats.family === 'tank' && u.task !== 'fall back');
+    const inf = own.filter((u) => u.stats.family === 'infantry');
+    const jeeps = own.filter((u) => u.stats.family === 'light_vehicle' && u.task !== 'fall back');
+
+    // ---- No contact yet: scout and advance in bounds -----------------------
+    if (!known.length) {
+      jeeps.forEach((j, k) => {
+        const lateral = (k - (jeeps.length - 1) / 2) * 110;
+        const ahead = Math.min(axL, 260);
+        this.moveTo(j, ownC.x + ux * ahead + px * lateral, ownC.z + uz * ahead + pz * lateral, true, 40);
+        j.task = 'scout';
+      });
+      const bound = Math.min(axL * 0.6, 110);
+      inf.forEach((u, k) => {
+        const lateral = (k - (inf.length - 1) / 2) * 26;
+        const goal = this.coverNear(ownC.x + ux * bound + px * lateral, ownC.z + uz * bound + pz * lateral, 40);
+        this.moveTo(u, goal.x, goal.z, true, 30);
+      });
+      tanks.forEach((u, k) => {
+        const lateral = (k - (tanks.length - 1) / 2) * 40;
+        this.moveTo(u, ownC.x + ux * (bound - 30) + px * lateral, ownC.z + uz * (bound - 30) + pz * lateral, true, 35);
+      });
+      // When the objective is buildings and nobody defends them, go for them.
+      if (enemyBuildings.length && axL < 260) this.assaultBuildings(own, enemyBuildings);
+      return;
+    }
+
+    // ---- Contact: avoid suicide, flank, standoff, cover --------------------
+    const enemyNear = known.filter((m) => dist(m.x, m.z, enemyC!.x, enemyC!.z) < 220);
+    const enemyNearPower = enemyNear.reduce((a, m) => a + m.power, 0);
+    const outmatched = ownPower < enemyNearPower * 0.75;
+    if (outmatched) {
+      if (this.holdSince < 0) this.holdSince = sim.time;
+    } else this.holdSince = -1;
+    const waiting = outmatched && sim.time - this.holdSince < 45;
+
+    // flank group
+    if (!this.flankPoint && own.length >= 6 && !waiting) {
+      const sideSign = this.pickFlankSide(enemyC!, px, pz);
+      this.flankPoint = this.sim.freeSpot(enemyC!.x + px * 170 * sideSign - ux * 30, enemyC!.z + pz * 170 * sideSign - uz * 30);
+      this.flankStarted = sim.time;
+      const candidates = [...jeeps, ...inf.slice().sort((a, b) => dist(b.x, b.z, ownC.x, ownC.z) - dist(a.x, a.z, ownC.x, ownC.z))];
+      const n = Math.max(2, Math.round(own.length * 0.3));
+      for (const u of candidates.slice(0, n)) this.flankers.add(u.id);
+    }
+    for (const id of [...this.flankers]) {
+      const u = sim.unitById(id);
+      if (!u || !isActive(u)) this.flankers.delete(id);
+    }
+
+    for (const u of own) {
+      if (u.order.type === 'retreat' || u.task === 'fall back') continue;
+      if (u.order.type === 'attack' && sim.targetValid(u, u.order.target)) continue;
+      const isFlanker = this.flankers.has(u.id);
+      if (isFlanker && this.flankPoint) {
+        const arrived = dist(u.x, u.z, this.flankPoint.x, this.flankPoint.z) < 45;
+        const late = sim.time - this.flankStarted > 75;
+        if (arrived || late) this.moveTo(u, enemyC!.x, enemyC!.z, true, 40);
+        else this.moveTo(u, this.flankPoint.x, this.flankPoint.z, true, 40);
+        u.task = 'flank';
+        continue;
+      }
+      if (u.stats.family === 'tank') this.tankStandoff(u, enemyC!, ux, uz, waiting);
+      else if (u.stats.family === 'infantry') this.infantryAdvance(u, enemyC!, waiting);
+      else this.jeepHarass(u, ownC, ux, uz);
+    }
+
+    // with no defenders left near the objective, demolish key structures
+    const defendersNearBase = known.length === 0;
+    if (defendersNearBase && enemyBuildings.length) this.assaultBuildings(own, enemyBuildings);
+  }
+
+  private pickFlankSide(c: { x: number; z: number }, px: number, pz: number): number {
+    // prefer the side with more forest cover and passable terrain
+    let left = 0;
+    let right = 0;
+    for (let k = 40; k <= 200; k += 40) {
+      left += bForest(this.sim.terrain, c.x + px * k, c.z + pz * k) - (bBlocked(this.sim.terrain, c.x + px * k, c.z + pz * k) ? 2 : 0);
+      right += bForest(this.sim.terrain, c.x - px * k, c.z - pz * k) - (bBlocked(this.sim.terrain, c.x - px * k, c.z - pz * k) ? 2 : 0);
+    }
+    return left >= right ? 1 : -1;
+  }
+
+  /** Tanks hold at standoff range, on high ground, away from infantry in forests. */
+  private tankStandoff(u: BUnit, enemyC: { x: number; z: number }, ux: number, uz: number, waiting: boolean): void {
+    const sim = this.sim;
+    const t = sim.terrain;
+    // danger: known enemy infantry close by (AT)
+    let danger: Memory | null = null;
+    let dd = Infinity;
+    for (const m of this.memory.values()) {
+      if (m.vehicle) continue;
+      const d = dist(u.x, u.z, m.x, m.z);
+      if (d < 150 && d < dd) {
+        dd = d;
+        danger = m;
+      }
+    }
+    if (danger) {
+      // back off to beyond AT range and keep shooting
+      const bx = u.x - danger.x;
+      const bz = u.z - danger.z;
+      const bl = Math.hypot(bx, bz) || 1;
+      this.moveTo(u, danger.x + (bx / bl) * 210, danger.z + (bz / bl) * 210, true, 30);
+      u.task = 'standoff';
+      return;
+    }
+    const range = waiting ? 250 : 205;
+    let best: { x: number; z: number } | null = null;
+    let bestScore = -Infinity;
+    const base = Math.atan2(-ux, -uz); // from enemy toward us
+    for (let k = -3; k <= 3; k++) {
+      const a = base + k * 0.22;
+      const x = enemyC.x + Math.sin(a) * range;
+      const z = enemyC.z + Math.cos(a) * range;
+      if (bBlocked(t, x, z)) continue;
+      const forestPenalty = bForest(t, x, z) * 25;
+      let infDanger = 0;
+      for (const m of this.memory.values()) if (!m.vehicle && dist(m.x, m.z, x, z) < 155) infDanger += 40;
+      const score = bHeight(t, x, z) * 1.4 - forestPenalty - infDanger - dist(u.x, u.z, x, z) * 0.05;
+      if (score > bestScore) {
+        bestScore = score;
+        best = { x, z };
+      }
+    }
+    if (best) {
+      this.moveTo(u, best.x, best.z, true, 35);
+      u.task = 'overwatch';
+    }
+  }
+
+  /** Infantry advance through cover; they wait in cover when outmatched. */
+  private infantryAdvance(u: BUnit, enemyC: { x: number; z: number }, waiting: boolean): void {
+    const d = dist(u.x, u.z, enemyC.x, enemyC.z);
+    const want = waiting ? 170 : 105;
+    if (Math.abs(d - want) < 20 && u.cover > 0) return; // good spot
+    const k = Math.max(0, (d - want) / Math.max(d, 1));
+    const gx = u.x + (enemyC.x - u.x) * k;
+    const gz = u.z + (enemyC.z - u.z) * k;
+    const goal = this.coverNear(gx, gz, 45);
+    this.moveTo(u, goal.x, goal.z, true, 25);
+    u.task = waiting ? 'take cover' : 'advance';
+  }
+
+  /** Jeeps harass infantry in the open and avoid tanks. */
+  private jeepHarass(u: BUnit, ownC: { x: number; z: number }, ux: number, uz: number): void {
+    const sim = this.sim;
+    let tankThreat = false;
+    for (const m of this.memory.values()) {
+      if (m.family === 'tank' && dist(u.x, u.z, m.x, m.z) < 290) tankThreat = true;
+    }
+    if (tankThreat) {
+      this.moveTo(u, ownC.x - ux * 90, ownC.z - uz * 90, false, 40);
+      u.task = 'evade';
+      return;
+    }
+    let prey: BUnit | null = null;
+    let pd = 260;
+    for (const e of sim.units) {
+      if (e.side === this.side || !isActive(e) || !e.seenBy[this.side] || e.stats.isVehicle || e.inForest) continue;
+      const d = dist(u.x, u.z, e.x, e.z);
+      if (d < pd) {
+        pd = d;
+        prey = e;
+      }
+    }
+    if (prey) this.attack(u, { kind: 'unit', id: prey.id });
+    else {
+      const c = centroid([...this.memory.values()]);
+      if (c) this.moveTo(u, c.x - ux * 170, c.z - uz * 170, true, 40);
+    }
+  }
+
+  /**
+   * No defenders in sight near the objective: sweep through the enemy
+   * structures to flush out hidden defenders. Tanks demolish military
+   * production (barracks, vehicle depots, factories) but the base itself is
+   * left standing so it can be captured.
+   */
+  private assaultBuildings(own: BUnit[], targets: { x: number; z: number; id: number; importance: number }[]): void {
+    const military = new Set(['barracks', 'vehicle_depot', 'factory']);
+    const demolish = targets.filter((t) => {
+      const b = this.sim.buildingById(t.id);
+      return !!b && military.has(b.spec.typeId);
+    });
+    own.forEach((u, k) => {
+      if (u.order.type === 'retreat' || u.task === 'fall back') return;
+      if (u.order.type === 'attack' && this.sim.targetValid(u, u.order.target)) return;
+      if (u.stats.family === 'tank' && demolish.length) {
+        this.attack(u, { kind: 'building', id: demolish[k % demolish.length].id });
+        return;
+      }
+      const t = targets[k % targets.length];
+      // circle the structure to find hidden defenders
+      const a = (k * 2.4 + this.sim.time * 0.01) % (Math.PI * 2);
+      this.moveTo(u, t.x + Math.cos(a) * 35, t.z + Math.sin(a) * 35, true, 30);
+      u.task = 'sweep';
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Defence
+  // ---------------------------------------------------------------------------
+
+  private planDefense(own: BUnit[]): void {
+    const sim = this.sim;
+    const buildings = this.ownBuildings();
+    const known = [...this.memory.values()];
+    const home = centroid(buildings) ?? { x: sim.setup.sides[this.side].entry.x, z: sim.setup.sides[this.side].entry.z };
+    if (!known.length) {
+      for (const u of own) if (u.order.type === 'idle') this.sim.orderHold([u.id]);
+      return;
+    }
+    // threats: enemies nearest to our structures
+    const threats = known
+      .map((m) => ({ m, d: Math.min(...buildings.map((b) => dist(b.x, b.z, m.x, m.z)), dist(home.x, home.z, m.x, m.z)) }))
+      .sort((a, b) => a.d - b.d);
+    const main = threats[0].m;
+    const threatC = centroid(threats.slice(0, 6).map((t) => t.m))!;
+    // building nearest to the threat: defend it
+    const anchor = buildings.slice().sort((a, b) => dist(a.x, a.z, threatC.x, threatC.z) - dist(b.x, b.z, threatC.x, threatC.z))[0] ?? home;
+
+    for (const u of own) {
+      if (u.order.type === 'retreat' || u.task === 'fall back') continue;
+      if (u.order.type === 'attack' && sim.targetValid(u, u.order.target)) continue;
+      const fam = u.stats.family;
+      if (fam === 'infantry') {
+        // hold near the threatened structure, in cover
+        const ax = threatC.x - anchor.x;
+        const az = threatC.z - anchor.z;
+        const al = Math.hypot(ax, az) || 1;
+        const r = ('radius' in anchor ? (anchor as { radius: number }).radius : 15) + 14;
+        const spot = this.coverNear(anchor.x + (ax / al) * r + (this.rng() - 0.5) * 30, anchor.z + (az / al) * r + (this.rng() - 0.5) * 30, 25);
+        if (dist(u.x, u.z, spot.x, spot.z) > 60) this.moveTo(u, spot.x, spot.z, true, 30);
+        else if (u.order.type === 'idle') this.sim.orderHold([u.id]);
+        u.task = 'defend';
+      } else if (fam === 'tank') {
+        // stay inside the base, engage from range
+        const ax = threatC.x - home.x;
+        const az = threatC.z - home.z;
+        const al = Math.hypot(ax, az) || 1;
+        const hold = clamp(al - 200, 0, 110);
+        this.moveTo(u, home.x + (ax / al) * hold, home.z + (az / al) * hold, true, 35);
+        u.task = 'defend';
+      } else {
+        // jeeps: mobile reserve hitting the nearest infantry threat
+        if (!main.vehicle) this.moveTo(u, main.x, main.z, true, 40);
+        else this.moveTo(u, home.x, home.z, true, 40);
+        u.task = 'reserve';
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Helpers
+  // ---------------------------------------------------------------------------
+
+  private seed = 1;
+  private rng(): number {
+    this.seed = (this.seed * 16807) % 2147483647;
+    return this.seed / 2147483647;
+  }
+
+  /** Find a covered position (forest or next to a friendly building) near (x, z). */
+  private coverNear(x: number, z: number, radius: number): { x: number; z: number } {
+    const t = this.sim.terrain;
+    let best = { x, z };
+    let bestScore = bForest(t, x, z) * 2 - (bBlocked(t, x, z) ? 10 : 0);
+    for (let k = 0; k < 10; k++) {
+      const a = (k / 10) * Math.PI * 2;
+      for (const rr of [0.5, 1]) {
+        const cx = x + Math.cos(a) * radius * rr;
+        const cz = z + Math.sin(a) * radius * rr;
+        if (bBlocked(t, cx, cz)) continue;
+        let s = bForest(t, cx, cz) * 2 - rr * 0.3;
+        for (const b of this.sim.buildings) {
+          if (b.side === this.side && !b.destroyed && dist(b.x, b.z, cx, cz) < b.radius + 15) s += 1.2;
+        }
+        if (s > bestScore) {
+          bestScore = s;
+          best = { x: cx, z: cz };
+        }
+      }
+    }
+    return this.sim.freeSpot(best.x, best.z);
+  }
+}
