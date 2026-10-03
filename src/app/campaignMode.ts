@@ -30,7 +30,7 @@ import { SIM_STEP, stepCampaign } from '../campaign/sim';
 import type { CampaignState } from '../campaign/types';
 import type { World } from '../world/world';
 import { createBattleSetup } from '../battle/setup';
-import { autoResolve } from '../battle/autoresolve';
+import { autoResolveAsync } from '../battle/autoresolve';
 import { applyBattleResult } from '../battle/result';
 import type { BattleResult, BattleSetup } from '../battle/types';
 import { CampaignView } from '../rendering/campaignView';
@@ -567,12 +567,28 @@ export class CampaignMode implements Mode, CampaignController {
     this.app.startBattle(setup);
   }
 
+  private resolving = false;
+
   autoResolveBattle(): void {
     const p = this.state.pendingBattle;
-    if (!p) return;
+    if (!p || this.resolving) return;
+    this.resolving = true;
     const setup = createBattleSetup(this.state, this.world, p);
-    const result = autoResolve(setup, this.world.terrain);
-    this.finishBattle(setup, result);
+    const progress = this.hud.showProgress('Resolving engagement', setup.locationName);
+    void autoResolveAsync(setup, this.world.terrain, { onProgress: (f) => progress.set(f) })
+      .then((result) => {
+        progress.close();
+        this.finishBattle(setup, result);
+      })
+      .catch((err) => {
+        progress.close();
+        console.error(err);
+        this.hud.toast('Auto-resolve failed; the engagement was broken off.', 'warn');
+        this.state.pendingBattle = null;
+      })
+      .finally(() => {
+        this.resolving = false;
+      });
   }
 
   /** Apply a battle result (tactical or auto-resolved) and show the report. */

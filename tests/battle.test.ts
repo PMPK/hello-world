@@ -146,3 +146,20 @@ describe('battle results persist into the campaign', () => {
     expect(c.state.armies[p.attackerArmyIds[0]]).toBeUndefined();
   });
 });
+
+describe('async auto-resolve', () => {
+  it('produces exactly the same result as the synchronous version', async () => {
+    const { autoResolveAsync } = await import('../src/battle/autoresolve');
+    const c1 = freshCampaign();
+    const c2 = freshCampaign();
+    const sync = autoResolve(createBattleSetup(c1.state, c1.world, assault(c1, { rifle_squad: 2, mbt: 1 })), c1.world.terrain);
+    const progress: number[] = [];
+    const asyncR = await autoResolveAsync(createBattleSetup(c2.state, c2.world, assault(c2, { rifle_squad: 2, mbt: 1 })), c2.world.terrain, {
+      sliceMs: 2,
+      onProgress: (f) => progress.push(f),
+    });
+    expect(asyncR).toEqual(sync);
+    expect(progress.length).toBeGreaterThan(1);
+    expect(progress[progress.length - 1]).toBe(1);
+  });
+});

@@ -438,6 +438,29 @@ export class CampaignHud {
     return close;
   }
 
+  /** Blocking progress overlay (e.g. auto-resolve on slow devices). */
+  showProgress(title: string, sub: string): { set: (f: number) => void; close: () => void } {
+    const back = el('div', 'modal-back');
+    const panel = el('div', 'panel modal');
+    const body = el('div', 'panel-body');
+    const fill = el('i', { style: { width: '0%' } });
+    const barEl = el('div', 'bar');
+    barEl.append(fill);
+    const pct = el('div', { class: 'mono muted', style: { fontSize: '12px', marginTop: '6px' }, text: '0%' });
+    body.append(el('div', { class: 'kicker', text: 'Auto-resolve' }), el('h1', { text: title }), el('p', { class: 'muted', text: sub }), barEl, pct);
+    panel.append(body);
+    back.append(panel);
+    back.dataset.testid = 'progress';
+    this.host.append(back);
+    return {
+      set: (f: number) => {
+        fill.style.width = `${Math.round(f * 100)}%`;
+        pct.textContent = `${Math.round(f * 100)}%`;
+      },
+      close: () => back.remove(),
+    };
+  }
+
   showReport(title: string, lines: string[], won: boolean | null, onClose?: () => void): void {
     openModal(this.host, {
       kicker: 'After-action report',
