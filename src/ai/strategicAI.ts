@@ -33,7 +33,7 @@ import {
 } from '../campaign/queries';
 import { difficultyOf } from '../data/difficulty';
 import { isUnlocked } from '../research/research';
-import type { AIState, Army, Base, CampaignState } from '../campaign/types';
+import type { AIState, Army, ArmySighting, Base, CampaignState } from '../campaign/types';
 
 const THINK_INTERVAL = 1.5;
 const OFFENSIVE_COOLDOWN = 14;
@@ -44,6 +44,12 @@ const PATROL_CLEARANCE = 36;
 /** Patrols range at most this far (km) from their home base. */
 const PATROL_RANGE = 110;
 const MAX_MILITARY_UNITS = 30;
+/** Forces seen this recently (hours) but out of view now are still worth hunting at their last known position. */
+const HUNT_WINDOW = 6;
+/** Lost contacts this fresh (hours) heading for a base count towards its threat. */
+const WARNING_WINDOW = 3;
+/** Contacts this fresh (hours) near a base count as a threat when deciding to fortify. */
+const THREAT_MEMORY = 12;
 
 /** Strategic AI for non-player expeditions. Runs on its own schedule. */
 export function stepStrategicAI(ctx: SimContext, _dt: number): void {
@@ -321,12 +327,26 @@ function soldiersOf(state: CampaignState, factionId: string): number {
   return n;
 }
 
-function underThreat(state: CampaignState, base: Base): boolean {
-  for (const a of Object.values(state.armies)) {
-    if (a.factionId === base.factionId || !areHostile(state, a.factionId, base.factionId)) continue;
-    if (dist(a.x, a.z, base.x, base.z) < 40) return true;
+/** Rival forces the faction has in view or saw within `hours`, from its intel. */
+function contacts(state: CampaignState, factionId: string, hours: number): ArmySighting[] {
+  const out: ArmySighting[] = [];
+  for (const s of Object.values(state.intel[factionId]?.armies ?? {})) {
+    if (!areHostile(state, factionId, s.factionId)) continue;
+    if (s.inSight || state.time - s.t <= hours) out.push(s);
   }
-  return false;
+  return out;
+}
+
+/** Strength of a sighted force as observed (assumed healthy and armed). */
+function sightingStrength(s: ArmySighting): number {
+  let p = 0;
+  for (const [id, n] of Object.entries(s.units)) p += statsOf(id).power * n;
+  return p;
+}
+
+/** A hostile force has been seen near the base recently (the AI only knows what its eyes report). */
+export function underThreat(state: CampaignState, base: Base): boolean {
+  return contacts(state, base.factionId, THREAT_MEMORY).some((s) => dist(s.x, s.z, base.x, base.z) < 40);
 }
 
 function thinkRecruitment(ctx: SimContext, ai: AIState, base: Base): void {
@@ -371,10 +391,13 @@ interface TargetOption {
   z: number;
   defense: number;
   value: number;
+  /** A force out of view: x/z is its last known position (go and look rather than pursue). */
+  lost?: boolean;
 }
 
 function enemyTargets(state: CampaignState, factionId: string): TargetOption[] {
   const out: TargetOption[] = [];
+  const recent = contacts(state, factionId, HUNT_WINDOW);
   for (const b of Object.values(state.bases)) {
     if (b.factionId === factionId || !areHostile(state, factionId, b.factionId)) continue;
     out.push({ target: { kind: 'base', id: b.id }, x: b.x, z: b.z, defense: garrisonStrength(state, b), value: 10 });
@@ -382,17 +405,23 @@ function enemyTargets(state: CampaignState, factionId: string): TargetOption[] {
   for (const b of Object.values(state.buildings)) {
     if (b.factionId === factionId || b.state === 'destroyed' || b.typeId !== 'extractor') continue;
     if (!areHostile(state, factionId, b.factionId) || !isOutpost(state, b)) continue;
+    // defenders it has seen near the outpost recently
     let defense = 0;
-    for (const a of Object.values(state.armies)) {
-      if (a.factionId === b.factionId && dist(a.x, a.z, b.x, b.z) < 12) defense += armyStrength(a);
+    for (const s of recent) {
+      if (s.factionId === b.factionId && dist(s.x, s.z, b.x, b.z) < 12) defense += sightingStrength(s);
     }
     out.push({ target: { kind: 'building', id: b.id }, x: b.x, z: b.z, defense, value: 3 });
   }
   for (const a of Object.values(state.armies)) {
     if (a.factionId === factionId || !areHostile(state, factionId, a.factionId)) continue;
-    // strategic fog of war: only forces the AI currently has eyes on
+    // strategic fog of war: only forces the AI currently has eyes on...
     if (!isVisibleToFaction(state, factionId, a.x, a.z)) continue;
     out.push({ target: { kind: 'army', id: a.id }, x: a.x, z: a.z, defense: armyStrength(a), value: 4 });
+  }
+  // ...and forces it lost sight of a few hours ago, at their last known position
+  for (const s of recent) {
+    if (s.inSight || !state.armies[s.armyId]) continue;
+    out.push({ target: { kind: 'army', id: s.armyId }, x: s.x, z: s.z, defense: sightingStrength(s), value: 3, lost: true });
   }
   return out;
 }
@@ -485,6 +514,12 @@ function thinkMilitary(ctx: SimContext, ai: AIState): void {
       continue;
     }
     const s = armyStrength(army);
+    if (army.order.type === 'move' && army.aiRole === 'attack' && ai.targetKind === 'army' && ai.targetId) {
+      const quarry = state.armies[ai.targetId];
+      if (quarry && isVisibleToFaction(state, fid, quarry.x, quarry.z) && dist(army.x, army.z, quarry.x, quarry.z) < 45) {
+        orderAttack(ctx, army.id, { kind: 'army', id: quarry.id });
+      }
+    }
     const lowAmmo = army.units.every((u) => {
       const st = statsOf(u.designId);
       return st.ammoCapacity > 0 && u.ammo < st.ammoCapacity * 0.25;
@@ -504,12 +539,20 @@ function thinkMilitary(ctx: SimContext, ai: AIState): void {
   if (!hostile || bases.length === 0) return;
 
   // --- defence: recall field armies if a base is threatened ---
+  const lost = contacts(state, fid, WARNING_WINDOW).filter((c) => !c.inSight);
   for (const base of bases) {
     let threat = 0;
     for (const a of Object.values(state.armies)) {
       if (a.factionId === fid || !isVisibleToFaction(state, fid, a.x, a.z)) continue;
       const d = dist(a.x, a.z, base.x, base.z);
       if (d < 26 || (a.order.type === 'attack_base' && a.order.targetId === base.id)) threat += armyStrength(a);
+    }
+    // early warning: forces that slipped out of view while closing on the base
+    for (const c of lost) {
+      const dx = base.x - c.x;
+      const dz = base.z - c.z;
+      const d = Math.hypot(dx, dz) || 1;
+      if (d < 26 || (d < 45 && (c.hx * dx + c.hz * dz) / d > 0.6)) threat += sightingStrength(c);
     }
     if (threat > garrisonStrength(state, base) * 0.9) {
       for (const army of armies) {
@@ -524,7 +567,7 @@ function thinkMilitary(ctx: SimContext, ai: AIState): void {
   const army = formArmyFromGarrison(ctx, home.id, strikeUnits.map((u) => u.id));
   if (!army) return;
   army.aiRole = target.target.kind === 'building' ? 'raid' : 'attack';
-  if (!orderAttack(ctx, army.id, target.target)) {
+  if (!engage(ctx, army, target)) {
     orderReturn(ctx, army.id);
     return;
   }
@@ -683,6 +726,12 @@ function retarget(ctx: SimContext, army: Army, strength: number, caution: number
   const t = pickTarget(state, army.factionId, army.x, army.z, strength, caution, fuelRange(army.units));
   if (!t) return false;
   if (dist(army.x, army.z, t.x, t.z) > 90) return false;
+  return engage(ctx, army, t);
+}
+
+/** Attack a target in view, or make for the last known position of one that is not. */
+function engage(ctx: SimContext, army: Army, t: TargetOption): boolean {
+  if (t.lost) return orderMove(ctx, army.id, t.x, t.z);
   return orderAttack(ctx, army.id, t.target);
 }
 

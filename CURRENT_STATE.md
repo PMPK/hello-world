@@ -1,7 +1,7 @@
 # CURRENT STATE
 
 *Last updated: post-MVP iteration 2 (research, garrisons, relief landings, convoys and supply runs, AI patrols,
-living bases, in-game help, ambient music, strategic intel). Schema v9; 110 unit + 16 e2e tests green.*
+living bases, in-game help, ambient music, strategic intel). Schema v9; 113 unit + 16 e2e tests green.*
 
 ## What works
 
@@ -65,7 +65,9 @@ living bases, in-game help, ambient music, strategic intel). Schema v9; 110 unit
   the buildings facing the attack and tanks shell spotted garrisons; missile teams stand off
   against armour; when contact is lost it probes last-known positions and sweeps the enemy's rear, and a
   beaten remnant withdraws even out of sight (no more stalled draws against a hidden, crippled tank).
-- **Strategic AI**: recon patrols (jeep pairs that watch the map, hunt convoys and weak forces at war),
+- **Strategic AI**: recon patrols (jeep pairs that watch the map, hunt convoys and weak forces at war), intel use
+  (hunts forces it lost sight of at their last known position, early warning from contacts heading for a base,
+  fortifies against what it has seen),
   needs-based build order, staffing/manpower-aware recruitment, raids on outposts,
   base assaults, defence recalls, fuel/readiness checks, refits after defeats; **strategic fog of war**
   (it only targets and reacts to player forces it can see).
@@ -95,7 +97,7 @@ living bases, in-game help, ambient music, strategic intel). Schema v9; 110 unit
   manual (campaign + battle).
 - **Crash guard**: a single failing frame is skipped; 30 in a row stop the game with a "The simulation
   stopped" dialog (error text, Reload / Main menu) instead of a silent freeze. Saves are untouched.
-- **Tests**: 110 Vitest unit tests; Playwright smoke tests on phone-landscape touch and desktop mouse profiles
+- **Tests**: 113 Vitest unit tests; Playwright smoke tests on phone-landscape touch and desktop mouse profiles
   (full loop incl. unit card, save/continue, save-slot listing and import; fortified base assault;
   task force split/merge; founding a base and sending it a convoy; research lab project switching;
   tap-to-garrison in a base battle; supply run to a task force; intel alert → Show → last known
@@ -159,9 +161,9 @@ is listed per day), `npm run sim:battle` (`ONLY=<label>` filters matrix lines), 
 
 ## Best next tasks
 
-1. **AI uses its intel**: the rival already keeps sightings and base reports (`state.intel[aiFaction]`) but its
-   decisions only look at what is in view now (`isVisibleToFaction` in `src/ai/strategicAI.ts`). Let raids,
-   defence recalls and offensives use last known positions and base reports.
+1. **AI long-range recon**: the rival hunts lost contacts and warns its bases from its intel, but its jeeps
+   cannot reach your base (patrols stay within 110 km of home), so its base assaults still use the true
+   garrison strength. Longer recon runs (or recon flights) would let it use its own base reports instead.
 2. **Logistics depth**: escorts for convoys and supply runs; standing orders (repeat a convoy or supply run);
    AI escorts for its own convoys.
 3. **Battle**: infantry capturing enemy structures; infantry garrisoning bunkers (extra crew); garrisoned

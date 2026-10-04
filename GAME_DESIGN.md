@@ -311,8 +311,12 @@ extractors), staffing-aware; fortifies (bunker, then AT gun) on the side facing 
 is high or hostilities begin; recruits within manpower limits; keeps a home guard; launches raids on
 outposts and assaults on bases when its strike force is strong enough (garrison **and** defences
 counted) **and has the fuel to get there**; recalls forces to defend; beaten or dry forces return home to refit.
-The AI plays under the same **strategic fog of war** as the player: it only targets, pursues and reacts
-to forces inside its vision (bases, outposts, armies); bases and outposts are always known.
+The AI plays under the same **strategic fog of war** as the player and keeps the same intel records: it
+targets forces in view, and for 6 h hunts a force it lost sight of by driving to its last known position
+(attacking once it is back in view); it values an outpost's defenders by what it has seen near it; it
+fortifies when it has seen hostile forces within 40 km in the last 12 h, and recalls its field forces when
+a strong contact slipped out of view within 3 h while heading for a base. Bases and outposts are always
+known (base defences are estimated from what stands there).
 **Recon patrols**: from day 3 a pair of fuelled jeeps roams watch points between the expeditions and
 around its outposts (keeping 36 km from your bases during the standoff, circling your base at war). At
 war a patrol cuts across the route of any convoy it sees, attacks forces much weaker than itself and
