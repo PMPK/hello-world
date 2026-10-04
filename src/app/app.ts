@@ -116,6 +116,7 @@ export class App {
     window.addEventListener('pointerdown', unlock, { capture: true });
     window.addEventListener('keydown', unlock, { capture: true });
     this.audio.setVolume(this.settings.soundVolume, this.settings.muted);
+    this.audio.setMusicVolume(this.settings.musicVolume);
     this.ui.addEventListener(
       'click',
       (e) => {
@@ -363,6 +364,7 @@ export class App {
     saveSettings(s);
     this.gr.applyQuality(s.quality);
     this.audio.setVolume(s.soundVolume, s.muted);
+    this.audio.setMusicVolume(s.musicVolume);
     this.fpsEl.style.display = s.showFps ? '' : 'none';
     this.onResize();
   }

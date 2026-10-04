@@ -80,8 +80,9 @@
   (medium/high), persistent scorch marks where heavy rounds and vehicles exploded, base lamps that come
   on after dusk — each a single extra draw call at most.
 - **Audio**: procedural WebAudio — positional gunfire per weapon class, cannon/explosion booms, order
-  acknowledgements, radio chirps for reports, contact alarm, wind ambience; Sound Off/Low/Medium/High in
-  settings, M to mute.
+  acknowledgements, radio chirps for reports, contact alarm, wind ambience, and a generated **ambient score**
+  (slow modal pad chords and sparse plucked notes on the map; darker harmony and a low pulse in battle,
+  crossfaded); Sound and Music Off/Low/Medium/High in settings, M to mute.
 - **Auto-resolve** runs in time slices with a progress dialog (no main-thread freeze on phones).
 - **In-game help**: the first commanded battle opens paused with a controls card (touch or mouse
   wording); the ? button on the battle bar brings it back; Command menu → How to play has the full
@@ -117,7 +118,7 @@
 - Only one pending battle at a time; simultaneous contacts are resolved sequentially.
 - Recovery is limited to two relief landings per expedition; after that a side that loses every base
   stays broken (the campaign continues as a sandbox).
-- Audio is procedural and minimal (no music, no voice lines); browsers start it only after the first tap/key.
+- Audio is procedural (no voice lines); browsers start it only after the first tap/key.
 - Defences only fight inside the 800 m battlefield around the contact point; positions have no firing arcs
   (they traverse freely) and silenced positions are re-crewed by the economy after the battle.
 - Headless Chromium uses SwiftShader in tests; real-device performance has been budgeted and measured in
@@ -143,6 +144,6 @@ is listed per day), `npm run sim:battle` (`ONLY=<label>` filters matrix lines), 
 4. AI escorts for its own convoys; player-visible intel reports from patrol contacts.
 5. Base specialisation; standing transfer orders (repeat a convoy) and convoy escorts.
 6. Battle simulation in a Web Worker; spatial hash for targeting.
-7. Audio polish: music stems, distant battle rumble on the campaign map, per-faction radio voices.
+7. Audio polish: distant battle rumble on the campaign map, per-faction radio voices, more musical variety.
 8. Guided first-hour scenario on top of the directive system (`CampaignHud.updateDirective`) and the
    battle tips card (`src/ui/help.ts`).

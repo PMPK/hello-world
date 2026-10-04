@@ -7,6 +7,8 @@
  * until then, when muted, or when WebAudio is unavailable every call is a no-op.
  */
 
+import { MusicEngine } from './music';
+
 export type ShotSound = 'small_arms' | 'mg' | 'hmg' | 'cannon' | 'at_rocket';
 export type UiSound = 'click' | 'confirm' | 'alert' | 'radio';
 export type Ambience = 'none' | 'campaign' | 'battle';
@@ -45,6 +47,8 @@ export class AudioEngine {
   private ambienceMode: Ambience = 'none';
   private ambienceNodes: AudioNode[] = [];
   private lastUi = 0;
+  private music: MusicEngine | null = null;
+  private musicVolume = 0.6;
 
   get available(): boolean {
     return this.ctx !== null;
@@ -73,6 +77,8 @@ export class AudioEngine {
       this.sfx.connect(comp);
       this.amb = ctx.createGain();
       this.amb.connect(this.master);
+      this.music = new MusicEngine(ctx, this.master);
+      this.music.setVolume(this.musicVolume);
       const len = ctx.sampleRate;
       this.noise = ctx.createBuffer(1, len, ctx.sampleRate);
       const data = this.noise.getChannelData(0);
@@ -84,6 +90,18 @@ export class AudioEngine {
     } catch {
       this.ctx = null;
     }
+  }
+
+  /** Music level 0..1 (0 = off); the master volume and mute apply on top. */
+  setMusicVolume(v: number): void {
+    this.musicVolume = Math.max(0, Math.min(1, v));
+    this.music?.setVolume(this.musicVolume);
+    this.syncMusic();
+  }
+
+  private syncMusic(): void {
+    const m = this.ambienceMode;
+    this.music?.setMode(this.musicVolume <= 0 ? 'off' : m === 'battle' ? 'battle' : m === 'campaign' ? 'calm' : 'off');
   }
 
   setVolume(volume: number, muted: boolean): void {
@@ -270,6 +288,7 @@ export class AudioEngine {
   setAmbience(mode: Ambience): void {
     if (mode === this.ambienceMode) return;
     this.ambienceMode = mode;
+    this.syncMusic();
     const ctx = this.ctx;
     if (!ctx || !this.amb || !this.noise) return;
     for (const n of this.ambienceNodes) {

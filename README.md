@@ -57,7 +57,8 @@ STRATEGIC MAP ──► economy / construction / production / army movement (rea
 - Standoff → hostilities diplomacy (tension), strategic AI (with fog of war and Easy/Normal/Hard difficulty)
   that builds, researches, fortifies, expands, recruits, raids and attacks.
 - Versioned saves in IndexedDB (localStorage fallback), autosave, three manual slots, export/import, continue, reset.
-- Procedural WebAudio sound; PWA: manifest, service worker, offline cache, fullscreen landscape.
+- Procedural WebAudio sound and a generated ambient score; PWA: manifest, service worker, offline cache,
+  fullscreen landscape.
 
 ## Development
 

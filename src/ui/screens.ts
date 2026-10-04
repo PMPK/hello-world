@@ -189,6 +189,25 @@ export function settingsModal(root: HTMLElement, s: Settings, onChange: (s: Sett
   sseg.append(...sbtns);
   snd.append(sseg, el('div', { class: 'hint', text: 'Procedural battle sounds, radio and wind. M toggles mute on a keyboard.' }));
   body.push(snd);
+  const mus = el('div', 'section');
+  mus.append(el('div', { class: 'label', text: 'Music' }));
+  const mlevels: [string, number][] = [
+    ['Off', 0],
+    ['Low', 0.3],
+    ['Medium', 0.6],
+    ['High', 1],
+  ];
+  const mseg = el('div', 'seg');
+  const mbtns = mlevels.map(([label, v]) =>
+    btn(label, () => {
+      s.musicVolume = v;
+      mbtns.forEach((b, i) => b.classList.toggle('active', Math.abs(s.musicVolume - mlevels[i][1]) < 0.01));
+      onChange(s);
+    }, Math.abs(s.musicVolume - v) < 0.01 ? 'active' : ''),
+  );
+  mseg.append(...mbtns);
+  mus.append(mseg, el('div', { class: 'hint', text: 'Generated ambient score: calm on the map, darker in battle.' }));
+  body.push(mus);
   const a = el('div', 'section');
   a.append(el('div', { class: 'label', text: 'Autosave' }));
   const as = el('div', 'seg');

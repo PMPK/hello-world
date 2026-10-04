@@ -16,6 +16,8 @@ export interface Settings {
   difficulty: Difficulty;
   /** Saw the battle tips card (shown at the first commanded battle). */
   battleTipsSeen: boolean;
+  /** Procedural music level 0..1 (0 = off). */
+  musicVolume: number;
 }
 
 const KEY = 'planet-x:settings';
@@ -35,6 +37,7 @@ export function defaultSettings(): Settings {
     muted: false,
     difficulty: 'normal',
     battleTipsSeen: false,
+    musicVolume: 0.6,
   };
 }
 
@@ -50,6 +53,7 @@ export function loadSettings(): Settings {
       quality: s.quality === 'low' || s.quality === 'medium' || s.quality === 'high' ? s.quality : d.quality,
       soundVolume: typeof s.soundVolume === 'number' && Number.isFinite(s.soundVolume) ? Math.max(0, Math.min(1, s.soundVolume)) : d.soundVolume,
       muted: typeof s.muted === 'boolean' ? s.muted : d.muted,
+      musicVolume: typeof s.musicVolume === 'number' && Number.isFinite(s.musicVolume) ? Math.max(0, Math.min(1, s.musicVolume)) : d.musicVolume,
       difficulty: s.difficulty === 'easy' || s.difficulty === 'normal' || s.difficulty === 'hard' ? s.difficulty : d.difficulty,
     };
   } catch {
