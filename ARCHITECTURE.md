@@ -67,7 +67,7 @@ src/rendering/
                             (4 instanced meshes, rebuilt only when a base changes)
   overlay.ts                2D canvas overlay: NATO-style symbols, labels, bars, selection box
   models/                   ModelBuilder (low-poly primitives → one geometry with vertex colours), unit/building models, cache
-src/audio/music.ts          procedural ambient score (pad chords, plucks, battle pulse) on a lookahead scheduler
+src/audio/music.ts          procedural ambient score (calm / tense-at-war / battle moods: pads, bass, plucks, pulse) on a lookahead scheduler
 src/audio/audio.ts          procedural WebAudio (shared noise buffer + oscillators): spatial gunfire/explosions,
                             UI cues, wind ambience; lazy context on first gesture, voice/frame budgets
 src/input/                  PointerInput (tap/double-tap/long-press/drag/pinch/wheel), Keyboard, CameraRig (RTS orbit camera)

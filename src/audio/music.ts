@@ -1,38 +1,86 @@
 /**
- * Procedural ambient score. Slow pad chords drift through a modal
- * progression with the odd soft plucked note on the strategic map; on the
- * battlefield the harmony darkens and a low pulse takes over. Everything is
- * scheduled a little ahead on the AudioContext clock from a light timer, so
- * it costs a handful of oscillators at a time.
+ * Procedural ambient score. Slow pad chords drift through modal progressions
+ * over a soft bass, with sparse plucked notes and short motifs on the
+ * strategic map; once the expedition is at war the map turns darker and a
+ * slow pulse creeps in; on the battlefield the harmony darkens further and a
+ * low heartbeat takes over. Each mode has a few progressions and switches
+ * between them at the end of a cycle, so the score does not loop audibly.
+ * Everything is scheduled a little ahead on the AudioContext clock from a
+ * light timer, so it costs a handful of oscillators at a time.
  *
  * Presentation only; cosmetic randomness (Math.random) is fine here.
  */
 
-export type MusicMode = 'calm' | 'battle' | 'off';
+export type MusicMode = 'calm' | 'tense' | 'battle' | 'off';
+type Playing = Exclude<MusicMode, 'off'>;
 
-/** Semitone offsets from the root for the chords of each mode. */
-const PROGRESSIONS: Record<Exclude<MusicMode, 'off'>, number[][]> = {
-  // A aeolian: i – VI – III – VII
+/** Semitone offsets from the root for the chords of each mode, a few progressions per mode. */
+const PROGRESSIONS: Record<Playing, number[][][]> = {
   calm: [
-    [0, 3, 7],
-    [-4, 0, 3],
-    [3, 7, 10],
-    [-2, 2, 5],
+    // A aeolian: i – VI – III – VII
+    [
+      [0, 3, 7],
+      [-4, 0, 3],
+      [3, 7, 10],
+      [-2, 2, 5],
+    ],
+    // i – iv – VI – v
+    [
+      [0, 3, 7],
+      [5, 8, 12],
+      [-4, 0, 3],
+      [-5, -2, 2],
+    ],
+    // i7 – VII – VImaj7 – iv
+    [
+      [0, 3, 7, 10],
+      [-2, 2, 5],
+      [-4, 0, 3, 7],
+      [5, 8, 12],
+    ],
   ],
-  // D phrygian-ish: i – bII – i – v
+  tense: [
+    // i – bII – bvii – i
+    [
+      [0, 3, 7],
+      [1, 5, 8],
+      [-2, 1, 5],
+      [0, 3, 7],
+    ],
+    // i – VI – bII – v
+    [
+      [0, 3, 7],
+      [-4, 0, 3],
+      [1, 5, 8],
+      [-5, -2, 2],
+    ],
+  ],
   battle: [
-    [0, 3, 7],
-    [1, 5, 8],
-    [0, 3, 7],
-    [-5, -2, 2],
+    // D phrygian-ish: i – bII – i – v
+    [
+      [0, 3, 7],
+      [1, 5, 8],
+      [0, 3, 7],
+      [-5, -2, 2],
+    ],
+    // i – bvii – VI – bII
+    [
+      [0, 3, 7],
+      [-2, 1, 5],
+      [-4, 0, 3],
+      [1, 5, 8],
+    ],
   ],
 };
-const ROOT: Record<Exclude<MusicMode, 'off'>, number> = { calm: 220, battle: 146.83 };
+const ROOT: Record<Playing, number> = { calm: 220, tense: 196, battle: 146.83 };
+/** Seconds per chord. */
+const CHORD_LEN: Record<Playing, number> = { calm: 11, tense: 10, battle: 8 };
 /** Pentatonic-ish scale (semitones) for the sparse melody. */
 const SCALE = [0, 3, 5, 7, 10, 12, 15];
 const LOOKAHEAD = 1.5;
 
 const hz = (root: number, semis: number): number => root * Math.pow(2, semis / 12);
+const pick = <T>(xs: T[]): T => xs[Math.floor(Math.random() * xs.length)];
 
 export class MusicEngine {
   private readonly out: GainNode;
@@ -44,6 +92,9 @@ export class MusicEngine {
   private nextNoteAt = 0;
   private nextPulseAt = 0;
   private chord = 0;
+  private prog = 0;
+  /** The chord sounding now (semitones), for the melody. */
+  private current: number[] = [0, 3, 7];
 
   constructor(
     private readonly ctx: AudioContext,
@@ -92,6 +143,7 @@ export class MusicEngine {
     this.nextNoteAt = now + 4;
     this.nextPulseAt = now + 1;
     this.chord = 0;
+    this.prog = Math.floor(Math.random() * PROGRESSIONS[mode].length);
     this.timer = setInterval(() => this.schedule(), 250);
     this.schedule();
   }
@@ -106,27 +158,50 @@ export class MusicEngine {
     const bus = this.bus;
     if (mode === 'off' || !bus || this.ctx.state !== 'running') return;
     const horizon = this.ctx.currentTime + LOOKAHEAD;
-    const prog = PROGRESSIONS[mode];
     const root = ROOT[mode];
+    const len = CHORD_LEN[mode];
     while (this.nextChordAt < horizon) {
-      const len = mode === 'battle' ? 8 : 11;
-      this.pad(bus, prog[this.chord % prog.length].map((s) => hz(root, s)), this.nextChordAt, len + 2.5, mode === 'battle' ? 0.05 : 0.045);
+      const progs = PROGRESSIONS[mode];
+      const prog = progs[this.prog % progs.length];
+      const chord = prog[this.chord % prog.length];
+      this.current = chord;
+      const at = this.nextChordAt;
+      this.pad(bus, chord.map((s) => hz(root, s)), at, len + 2.5, mode === 'calm' ? 0.045 : 0.05);
+      // a soft bass under the chord's root, an octave down
+      this.bass(bus, hz(root / 2, chord[0] > 4 ? chord[0] - 12 : chord[0]), at, len + 1, mode === 'battle' ? 0.04 : 0.032);
       this.nextChordAt += len;
       this.chord++;
-    }
-    if (mode === 'calm') {
-      while (this.nextNoteAt < horizon) {
-        const chord = prog[(this.chord + prog.length - 1) % prog.length];
-        const semis = Math.random() < 0.6 ? chord[Math.floor(Math.random() * chord.length)] + 12 : SCALE[Math.floor(Math.random() * SCALE.length)] + 12;
-        this.pluck(bus, hz(root, semis), this.nextNoteAt, 0.06);
-        this.nextNoteAt += 2.2 + Math.random() * 4.5;
+      // end of a cycle: sometimes move on to another progression
+      if (this.chord % prog.length === 0 && progs.length > 1 && Math.random() < 0.6) {
+        this.prog = (this.prog + 1 + Math.floor(Math.random() * (progs.length - 1))) % progs.length;
       }
-    } else {
-      // battle: a low heartbeat pulse
+    }
+    if (mode !== 'battle') {
+      while (this.nextNoteAt < horizon) {
+        const at = this.nextNoteAt;
+        const chord = this.current;
+        if (mode === 'calm' && Math.random() < 0.3) {
+          // a short rising motif from a chord tone
+          const start = SCALE.indexOf(pick(chord.filter((s) => SCALE.includes(s))) ?? 0);
+          const steps = 2 + Math.floor(Math.random() * 3);
+          for (let k = 0; k < steps; k++) {
+            const s = SCALE[Math.min(SCALE.length - 1, Math.max(0, start) + k)];
+            this.pluck(bus, hz(root, s + 12), at + k * 0.38, 0.05);
+          }
+        } else {
+          const semis = Math.random() < 0.6 ? pick(chord) + 12 : pick(SCALE) + 12;
+          this.pluck(bus, hz(root, semis), at, mode === 'tense' ? 0.045 : 0.06);
+        }
+        this.nextNoteAt += mode === 'tense' ? 4 + Math.random() * 6 : 2.2 + Math.random() * 4.5;
+      }
+    }
+    if (mode !== 'calm') {
+      // battle: a low heartbeat; at war on the map: a slower, quieter pulse
+      const tense = mode === 'tense';
       while (this.nextPulseAt < horizon) {
-        this.pulse(bus, hz(root / 2, 0), this.nextPulseAt, 0.11);
-        this.pulse(bus, hz(root / 2, 0), this.nextPulseAt + 0.32, 0.06);
-        this.nextPulseAt += 1.6;
+        this.pulse(bus, hz(root / 2, 0), this.nextPulseAt, tense ? 0.06 : 0.11);
+        this.pulse(bus, hz(root / 2, 0), this.nextPulseAt + 0.32, tense ? 0.035 : 0.06);
+        this.nextPulseAt += tense ? 3.2 : 1.6;
       }
     }
   }
@@ -161,6 +236,24 @@ export class MusicEngine {
       filter.disconnect();
       env.disconnect();
     }, (at - ctx.currentTime + dur + 0.5) * 1000);
+  }
+
+  /** Low sustained note under a chord. */
+  private bass(bus: AudioNode, f: number, at: number, dur: number, level: number): void {
+    const ctx = this.ctx;
+    const o = ctx.createOscillator();
+    // triangle: its overtones keep the line audible on phone speakers
+    o.type = 'triangle';
+    o.frequency.value = f;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0, at);
+    g.gain.linearRampToValueAtTime(level, at + 1.8);
+    g.gain.setValueAtTime(level, at + dur * 0.6);
+    g.gain.linearRampToValueAtTime(0, at + dur);
+    o.connect(g);
+    g.connect(bus);
+    o.start(at);
+    o.stop(at + dur + 0.1);
   }
 
   /** Soft plucked note with a quick decay (and a little echo). */

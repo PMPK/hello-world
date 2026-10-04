@@ -86,8 +86,9 @@ living bases, in-game help, ambient music, strategic intel). Schema v9; 104 unit
   on after dusk — each a single extra draw call at most.
 - **Audio**: procedural WebAudio — positional gunfire per weapon class, cannon/explosion booms, order
   acknowledgements, radio chirps for reports, contact alarm, wind ambience, and a generated **ambient score**
-  (slow modal pad chords and sparse plucked notes on the map; darker harmony and a low pulse in battle,
-  crossfaded); Sound and Music Off/Low/Medium/High in settings, M to mute.
+  (slow modal pad chords over a soft bass with sparse plucked notes and short motifs on the map, several
+  progressions per mood; a darker mood with a slow pulse on the map once at war; darker harmony and a low
+  heartbeat in battle; crossfaded); Sound and Music Off/Low/Medium/High in settings, M to mute.
 - **Auto-resolve** runs in time slices with a progress dialog (no main-thread freeze on phones).
 - **In-game help**: the first commanded battle opens paused with a controls card (touch or mouse
   wording); the ? button on the battle bar brings it back; Command menu → How to play has the full
@@ -158,7 +159,7 @@ is listed per day), `npm run sim:battle` (`ONLY=<label>` filters matrix lines), 
 4. **Base specialisation** (e.g. mining town, fortress, depot) on top of the existing per-base economy.
 5. **Performance**: profile on a real phone (rendering is the main cost; the battle simulation measures
    ≈ 0.26 ms per sub-step for 60 units, see ARCHITECTURE.md, so a Web Worker is not needed yet).
-6. **Audio polish**: distant battle rumble on the campaign map, per-faction radio voices, more musical variety
-   (`src/audio/music.ts`).
+6. **Audio polish**: distant battle rumble on the campaign map, per-faction radio voices
+   (music moods live in `src/audio/music.ts`).
 7. **Guided first hour** on top of the directive system (`CampaignHud.updateDirective`) and the battle tips
    card (`src/ui/help.ts`).

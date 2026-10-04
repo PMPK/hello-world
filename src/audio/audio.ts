@@ -49,6 +49,7 @@ export class AudioEngine {
   private lastUi = 0;
   private music: MusicEngine | null = null;
   private musicVolume = 0.6;
+  private war = false;
 
   get available(): boolean {
     return this.ctx !== null;
@@ -99,9 +100,16 @@ export class AudioEngine {
     this.syncMusic();
   }
 
+  /** At war the strategic map's music turns tense. */
+  setWarFooting(war: boolean): void {
+    if (war === this.war) return;
+    this.war = war;
+    this.syncMusic();
+  }
+
   private syncMusic(): void {
     const m = this.ambienceMode;
-    this.music?.setMode(this.musicVolume <= 0 ? 'off' : m === 'battle' ? 'battle' : m === 'campaign' ? 'calm' : 'off');
+    this.music?.setMode(this.musicVolume <= 0 ? 'off' : m === 'battle' ? 'battle' : m === 'campaign' ? (this.war ? 'tense' : 'calm') : 'off');
   }
 
   setVolume(volume: number, muted: boolean): void {

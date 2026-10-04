@@ -204,6 +204,8 @@ export class CampaignMode implements Mode, CampaignController {
       this.hudTimer = 0.25;
       this.validateSelection();
       this.watchReliefLanding();
+      const pf = this.state.playerFactionId;
+      this.app.audio.setWarFooting(this.state.relations.some((r) => r.status === 'hostile' && (r.a === pf || r.b === pf)));
       this.hud.update();
     }
     this.autosaveTimer += dt;
