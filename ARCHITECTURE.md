@@ -104,6 +104,9 @@ This mapping is generic: new building types or unit designs need no battle-speci
   faction's units are one `InstancedMesh` per model; instance colour only darkens wrecks.
 - Trees/rocks are `InstancedMesh`; the strategic map uses 6–8-triangle tree LODs.
 - Typical budget (medium): ~100k triangles, ≤60 draw calls on the campaign map; ~100k / ~25 calls in battle.
+  Measured (start of a campaign, 915×412): campaign 22 calls / 66k tris on low, 32 / 96k on medium;
+  battle 14 / 51k on low, 20 / 81k on medium. Resource sites are 3 instanced meshes; each army token is
+  baked into one geometry (+ shared banner parts); settlements are 4 instanced meshes.
 - Labels and symbols are drawn on a 2D canvas overlay (no DOM churn). HUD DOM refreshes at 4–5 Hz and
   skips rebuilding while a finger is down or the panel scrolls.
 

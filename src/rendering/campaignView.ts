@@ -16,6 +16,7 @@ import { Daylight } from './daylight';
 import { shimmerWater, waterTime } from './water';
 import { NightLights, type LightSpot } from './nightLights';
 import { Settlements } from './settlement';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { makeLights, type GameRenderer } from './renderer';
 
 /** Model scales on the strategic map (models are authored in metres). */
@@ -34,6 +35,11 @@ const tmpV = new THREE.Vector3();
 const tmpQ = new THREE.Quaternion();
 const tmpS = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
+/** Army token banner parts, shared by every token. */
+const ARMY_POLE_GEO = new THREE.CylinderGeometry(0.05, 0.05, 3.2, 5);
+const ARMY_POLE_MAT = new THREE.MeshLambertMaterial({ color: 0x3a3a3a });
+const ARMY_FLAG_GEO = new THREE.BoxGeometry(0.05, 0.75, 1.1);
+const ARMY_RING_GEO = buildRing(1.5, 1.75, 28);
 
 function terrainColor(b: BiomeId, h: number, slope: number, m: number, out: THREE.Color): THREE.Color {
   switch (b) {
@@ -85,7 +91,14 @@ export class CampaignView {
   private buildingObjs = new Map<string, { obj: THREE.Object3D; key: string }>();
   private armyObjs = new Map<string, ArmyVisual>();
   private convoyObjs = new Map<string, THREE.Mesh>();
-  private siteObjs = new Map<string, { obj: THREE.Object3D; beacon: THREE.Mesh }>();
+  /** Resource sites: one instanced mesh per deposit decoration and one for all beacons (3 draw calls). */
+  private siteDeco!: Record<'minerals' | 'hydrocarbons', THREE.InstancedMesh>;
+  private siteBeacons!: THREE.InstancedMesh;
+  private siteKey = '';
+  private readonly sm = new THREE.Matrix4();
+  private readonly sq = new THREE.Quaternion();
+  private readonly sp = new THREE.Vector3();
+  private readonly ss = new THREE.Vector3();
   private perimeters = new Map<string, { line: THREE.LineLoop; faction: string }>();
   private roadMesh: THREE.Mesh | null = null;
   private roadsKey = '';
@@ -96,9 +109,9 @@ export class CampaignView {
   private ghostKey = '';
   private time = 0;
   private damagedMat = new THREE.MeshLambertMaterial({ vertexColors: true, color: 0x8f7d72 });
-  private beaconMats: Record<string, THREE.MeshBasicMaterial> = {
-    minerals: new THREE.MeshBasicMaterial({ color: 0x8fd3ff }),
-    hydrocarbons: new THREE.MeshBasicMaterial({ color: 0xffb347 }),
+  private beaconColors: Record<string, THREE.Color> = {
+    minerals: new THREE.Color(0x8fd3ff),
+    hydrocarbons: new THREE.Color(0xffb347),
   };
   selectedArmyId: string | null = null;
   selectedBaseId: string | null = null;
@@ -448,28 +461,60 @@ export class CampaignView {
     }
   }
 
+  private makeSiteMeshes(count: number): void {
+    const mk = (g: THREE.BufferGeometry, m: THREE.Material): THREE.InstancedMesh => {
+      const im = new THREE.InstancedMesh(g, m, Math.max(1, count));
+      im.count = 0;
+      im.frustumCulled = false; // spread over the whole map: per-instance culling is not worth it
+      this.scene.add(im);
+      return im;
+    };
+    this.siteDeco = { minerals: mk(Models.crystals(), Materials.standard), hydrocarbons: mk(Models.oilSeep(), Materials.standard) };
+    this.siteDeco.minerals.castShadow = true;
+    this.siteBeacons = mk(new THREE.OctahedronGeometry(0.42, 0), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+  }
+
   private syncSites(state: CampaignState): void {
-    for (const s of Object.values(state.sites)) {
-      let o = this.siteObjs.get(s.id);
-      if (!o) {
-        const group = new THREE.Group();
-        const deco = new THREE.Mesh(s.kind === 'minerals' ? Models.crystals() : Models.oilSeep(), Materials.standard);
-        deco.scale.setScalar(0.32);
-        group.add(deco);
-        const beacon = new THREE.Mesh(new THREE.OctahedronGeometry(0.42, 0), this.beaconMats[s.kind]);
-        beacon.position.y = 2.4;
-        group.add(beacon);
-        group.position.set(s.x, this.h(s.x, s.z), s.z);
-        this.scene.add(group);
-        o = { obj: group, beacon };
-        this.siteObjs.set(s.id, o);
-      }
+    const sites = Object.values(state.sites);
+    if (!this.siteBeacons) this.makeSiteMeshes(sites.length);
+    const open = sites.filter((s) => {
       const b = s.buildingId ? state.buildings[s.buildingId] : undefined;
-      const claimed = !!b && b.state !== 'destroyed';
-      o.obj.visible = !claimed;
-      o.beacon.position.y = 2.3 + Math.sin(this.time * 2 + s.x) * 0.2;
-      o.beacon.rotation.y = this.time;
+      return !(b && b.state !== 'destroyed');
+    });
+    // deposits only change when a site is claimed or freed
+    const key = open.map((s) => s.id).join(',');
+    if (key !== this.siteKey) {
+      this.siteKey = key;
+      const n = { minerals: 0, hydrocarbons: 0 };
+      for (const s of open) {
+        const im = this.siteDeco[s.kind];
+        if (n[s.kind] >= im.instanceMatrix.count) continue;
+        this.sp.set(s.x, this.h(s.x, s.z), s.z);
+        this.sq.identity();
+        this.ss.setScalar(0.32);
+        this.sm.compose(this.sp, this.sq, this.ss);
+        im.setMatrixAt(n[s.kind]++, this.sm);
+      }
+      for (const k of ['minerals', 'hydrocarbons'] as const) {
+        this.siteDeco[k].count = n[k];
+        this.siteDeco[k].instanceMatrix.needsUpdate = true;
+      }
     }
+    // beacons bob and spin every frame
+    let i = 0;
+    for (const s of open) {
+      if (i >= this.siteBeacons.instanceMatrix.count) break;
+      this.sp.set(s.x, this.h(s.x, s.z) + 2.3 + Math.sin(this.time * 2 + s.x) * 0.2, s.z);
+      this.sq.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, this.time);
+      this.ss.setScalar(1);
+      this.sm.compose(this.sp, this.sq, this.ss);
+      this.siteBeacons.setMatrixAt(i, this.sm);
+      this.siteBeacons.setColorAt(i, this.beaconColors[s.kind]);
+      i++;
+    }
+    this.siteBeacons.count = i;
+    this.siteBeacons.instanceMatrix.needsUpdate = true;
+    if (this.siteBeacons.instanceColor) this.siteBeacons.instanceColor.needsUpdate = true;
   }
 
   private syncPerimeters(state: CampaignState): void {
@@ -568,22 +613,46 @@ export class CampaignView {
       }
       place(sq);
     }
+    // bake the whole token into one geometry: one draw call (plus its shadow) instead of one per figure
+    models.updateMatrixWorld(true);
+    const parts: THREE.BufferGeometry[] = [];
     models.traverse((o) => {
-      if ((o as THREE.Mesh).isMesh) o.castShadow = true;
+      const m = o as THREE.Mesh;
+      if (m.isMesh) parts.push(m.geometry.clone().applyMatrix4(m.matrixWorld));
     });
-    g.add(models);
-    // standard / banner
-    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 3.2, 5), new THREE.MeshLambertMaterial({ color: 0x3a3a3a }));
+    const merged = parts.length ? mergeGeometries(parts) : new THREE.BufferGeometry();
+    for (const p of parts) p.dispose();
+    const body = new THREE.Mesh(merged, Materials.standard);
+    body.castShadow = true;
+    g.add(body);
+    // standard / banner (shared geometry, one material per faction colour)
+    const pole = new THREE.Mesh(ARMY_POLE_GEO, ARMY_POLE_MAT);
     pole.position.set(-0.2, 1.6, -0.2);
     g.add(pole);
-    const flag = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.75, 1.1), new THREE.MeshLambertMaterial({ color }));
+    const flag = new THREE.Mesh(ARMY_FLAG_GEO, this.factionMat(`flag:${color}`, () => new THREE.MeshLambertMaterial({ color })));
     flag.position.set(-0.2, 2.75, 0.35);
     flag.name = 'flag';
     g.add(flag);
-    const ring = new THREE.Mesh(buildRing(1.5, 1.75, 28), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.55, depthWrite: false }));
+    const ring = new THREE.Mesh(ARMY_RING_GEO, this.factionMat(`ring:${color}`, () => new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.55, depthWrite: false })));
     ring.position.y = 0.06;
     g.add(ring);
     return g;
+  }
+
+  private readonly factionMats = new Map<string, THREE.Material>();
+  private factionMat(key: string, make: () => THREE.Material): THREE.Material {
+    let m = this.factionMats.get(key);
+    if (!m) {
+      m = make();
+      this.factionMats.set(key, m);
+    }
+    return m;
+  }
+
+  /** Free a token's baked body (banner parts are shared). */
+  private dropArmyGroup(group: THREE.Group): void {
+    this.scene.remove(group);
+    (group.children[0] as THREE.Mesh).geometry.dispose();
   }
 
   private syncArmies(state: CampaignState, dt: number): void {
@@ -593,7 +662,7 @@ export class CampaignView {
       let v = this.armyObjs.get(a.id);
       const key = this.armyKey(a);
       if (!v || v.key !== key) {
-        if (v) this.scene.remove(v.group);
+        if (v) this.dropArmyGroup(v.group);
         const group = this.makeArmy(a, state);
         v = { group, key, heading: 0, pos: new THREE.Vector3(a.x, this.h(a.x, a.z), a.z) };
         this.scene.add(group);
@@ -629,7 +698,7 @@ export class CampaignView {
     }
     for (const [id, v] of this.armyObjs) {
       if (!seen.has(id)) {
-        this.scene.remove(v.group);
+        this.dropArmyGroup(v.group);
         this.armyObjs.delete(id);
       }
     }
@@ -714,6 +783,7 @@ export class CampaignView {
   /** Rebuild terrain mesh and vegetation (after runtime terrain edits). */
   refreshTerrain(state: CampaignState): void {
     this.settlements?.invalidate();
+    this.siteKey = ''; // re-seat deposits on the new ground
     this.scene.remove(this.terrainMesh);
     this.terrainMesh.geometry.dispose();
     (this.terrainMesh.material as THREE.Material).dispose();
@@ -929,6 +999,11 @@ export class CampaignView {
     });
     this.damagedMat.dispose();
     this.settlements.dispose();
+    if (this.siteBeacons) {
+      this.siteBeacons.geometry.dispose();
+      (this.siteBeacons.material as THREE.Material).dispose();
+      for (const im of [this.siteBeacons, this.siteDeco.minerals, this.siteDeco.hydrocarbons]) im.dispose();
+    }
   }
 }
 
