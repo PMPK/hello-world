@@ -4,7 +4,7 @@ import { outOfAmmo, type BattleSim } from '../battle/sim';
 import type { BUnit, SideIndex } from '../battle/types';
 import { btn, clear, el, ICONS, iconBtn } from './dom';
 import { Minimap } from './minimap';
-import { confirmModal } from './screens';
+import { confirmModal, Toasts } from './screens';
 
 export interface BattleController {
   readonly sim: BattleSim;
@@ -52,7 +52,16 @@ export function describeOrder(sim: BattleSim, u: BUnit): string {
     return u.ammo > 0 || u.fuel > 5 ? 'Standing by · resupplying units nearby' : 'Standing by · cargo empty';
   }
   const engaging = !!u.target && sim.targetValid(u, u.target);
+  if (u.inside !== null) {
+    const b = sim.buildingById(u.inside);
+    const where = b ? buildingDisplayName(b.spec.typeId, b.spec.siteKind ?? undefined) : 'building';
+    return `Garrisoned in ${where}${engaging ? ' · firing' : ''} · move to leave`;
+  }
   switch (o.type) {
+    case 'garrison': {
+      const b = sim.buildingById(o.buildingId);
+      return `Entering ${b ? buildingDisplayName(b.spec.typeId, b.spec.siteKind ?? undefined) : 'building'}`;
+    }
     case 'move':
       if (o.attackMove) return engaging ? 'Attack-move · engaging' : 'Attack-moving';
       return u.path.length ? 'Moving' : engaging ? 'Engaging' : 'Holding ground';
@@ -81,6 +90,7 @@ interface CardRefs {
 export class BattleHud {
   readonly root: HTMLElement;
   private clockEl!: HTMLElement;
+  private toasts: Toasts;
   private forces!: HTMLElement;
   private speedBtns: HTMLButtonElement[] = [];
   private endBtn!: HTMLButtonElement;
@@ -107,6 +117,8 @@ export class BattleHud {
     this.card = el('div', { class: 'panel unitcard', dataset: { testid: 'unit-card' } });
     this.card.style.display = 'none';
     this.root.append(this.selInfo, this.card);
+    this.toasts = new Toasts(this.root);
+    this.toasts.el.classList.add('battle-toasts');
     host.append(this.root);
     this.minimap = new Minimap(this.root, c.sim, c.playerSide, (x, z) => c.jumpCamera(x, z));
     this.update();
@@ -114,6 +126,11 @@ export class BattleHud {
 
   dispose(): void {
     this.root.remove();
+  }
+
+  /** Short notice under the top bar (clear of the minimap and the command bar). */
+  toast(text: string, kind = 'warn'): void {
+    this.toasts.push(text, kind, 2600);
   }
 
   private buildTop(): HTMLElement {
@@ -340,7 +357,8 @@ export class BattleHud {
         }
         order.textContent = describeOrder(sim, u);
         const f: [string, string][] = [];
-        if (u.inForest) f.push(['Forest cover', 'ok']);
+        if (u.inside !== null) f.push(['In building', 'ok']);
+        else if (u.inForest) f.push(['Forest cover', 'ok']);
         else if (u.cover > 0) f.push(['Near structure', 'ok']);
         if (u.suppression > 0.4) f.push(['Suppressed', 'warn']);
         if (outOfAmmo(u)) f.push(['Out of ammo', 'bad']);

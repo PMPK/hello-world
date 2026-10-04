@@ -290,6 +290,66 @@ export class TacticalAI {
     }
   }
 
+  /**
+   * Infantry spotted inside a structure is hard to dig out with rifles:
+   * tanks shell the building instead (heavy hits wreck it and hurt the
+   * garrison; a collapse throws the survivors into the open).
+   */
+  private shellGarrisons(own: BUnit[]): void {
+    const sim = this.sim;
+    const held = sim.buildings.filter((b) => b.side !== this.side && !b.destroyed && sim.occupants(b).some((u) => u.seenBy[this.side]));
+    if (!held.length) return;
+    for (const u of own) {
+      if (u.stats.family !== 'tank' || u.task === 'fall back' || u.order.type === 'retreat') continue;
+      if (u.order.type === 'attack' && sim.targetValid(u, u.order.target)) continue;
+      let best: BBuilding | undefined;
+      let bd = 380;
+      for (const b of held) {
+        const d = dist(u.x, u.z, b.x, b.z);
+        if (d < bd) {
+          bd = d;
+          best = b;
+        }
+      }
+      if (best) this.attack(u, { kind: 'building', id: best.id });
+    }
+  }
+
+  /**
+   * Siege defenders occupy the structures nearest the threat (up to each
+   * building's capacity). Returns the units that are inside or on their way.
+   */
+  private garrisonBuildings(inf: BUnit[], toward: { x: number; z: number }): Set<number> {
+    const sim = this.sim;
+    const taken = new Set<number>();
+    for (const u of inf) if (u.inside !== null || u.order.type === 'garrison') taken.add(u.id);
+    const free = inf.filter((u) => !taken.has(u.id) && u.order.type !== 'retreat' && u.task !== 'rearm');
+    if (!free.length) return taken;
+    const shelters = sim.buildings
+      .filter((b) => b.side === this.side && sim.garrisonCapacity(b) > 0)
+      .sort((a, b) => dist(a.x, a.z, toward.x, toward.z) - dist(b.x, b.z, toward.x, toward.z));
+    for (const b of shelters) {
+      while (free.length) {
+        // the nearest free squad within a short walk
+        let pick = -1;
+        let pd = 230;
+        free.forEach((u, k) => {
+          const d = dist(u.x, u.z, b.x, b.z);
+          if (d < pd) {
+            pd = d;
+            pick = k;
+          }
+        });
+        if (pick < 0 || !sim.canGarrison(free[pick], b)) break;
+        const u = free.splice(pick, 1)[0];
+        sim.orderGarrison([u.id], b.id);
+        u.task = 'garrison';
+        taken.add(u.id);
+      }
+    }
+    return taken;
+  }
+
   // ---------------------------------------------------------------------------
   // Focus fire
   // ---------------------------------------------------------------------------
@@ -366,7 +426,8 @@ export class TacticalAI {
       const at = u.stats.weapons.find((w) => w.antiVehicleOnly);
       if (!at || u.ammo < at.ammoPerShot) continue;
       let tgt: BUnit | null = null;
-      let td = at.range * 1.3;
+      // a garrison fires from its building rather than leaving cover
+      let td = u.inside !== null ? at.range : at.range * 1.3;
       for (const e of sim.units) {
         if (e.side === this.side || !isActive(e) || !e.seenBy[this.side] || !e.stats.isVehicle) continue;
         const d = dist(u.x, u.z, e.x, e.z);
@@ -465,7 +526,10 @@ export class TacticalAI {
       const u = sim.unitById(id);
       if (!u || !isActive(u)) this.flankers.delete(id);
     }
-    if (!waiting) this.reduceDefenses(own);
+    if (!waiting) {
+      this.reduceDefenses(own);
+      this.shellGarrisons(own);
+    }
     // missile teams only stand off against armour; against infantry they fight as riflemen
     const vehicleC = centroid(known.filter((m) => m.vehicle));
 
@@ -691,8 +755,12 @@ export class TacticalAI {
     const buildings = this.ownBuildings();
     const known = [...this.memory.values()];
     const home = centroid(buildings) ?? { x: sim.setup.sides[this.side].entry.x, z: sim.setup.sides[this.side].entry.z };
+    const infantry = own.filter((u) => u.stats.family === 'infantry');
     if (!known.length) {
-      for (const u of own) if (u.order.type === 'idle') this.sim.orderHold([u.id]);
+      // man the structures facing the attacker's approach while waiting
+      const atk = sim.setup.sides[this.enemySide].entry;
+      const inside = this.garrisonBuildings(infantry, atk);
+      for (const u of own) if (u.order.type === 'idle' && !inside.has(u.id)) this.sim.orderHold([u.id]);
       return;
     }
     // threats: enemies nearest to our structures
@@ -703,11 +771,13 @@ export class TacticalAI {
     const threatC = centroid(threats.slice(0, 6).map((t) => t.m))!;
     // building nearest to the threat: defend it
     const anchor = buildings.slice().sort((a, b) => dist(a.x, a.z, threatC.x, threatC.z) - dist(b.x, b.z, threatC.x, threatC.z))[0] ?? home;
+    const garrisoned = this.garrisonBuildings(infantry, threatC);
 
     for (const u of own) {
       if (u.order.type === 'retreat' || u.task === 'fall back' || u.task === 'rearm') continue;
       if (u.order.type === 'attack' && sim.targetValid(u, u.order.target)) continue;
       const fam = u.stats.family;
+      if (fam === 'infantry' && garrisoned.has(u.id)) continue;
       if (fam === 'infantry') {
         // hold near the threatened structure, in cover
         const ax = threatC.x - anchor.x;

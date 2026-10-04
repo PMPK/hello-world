@@ -7,7 +7,7 @@ import type { WeaponClass } from '../data/components';
 import { BIOME } from '../world/terrain';
 import type { BattleSim } from '../battle/sim';
 import { bHeight, type BattleTerrain } from '../battle/terrain';
-import type { BUnit, SideIndex } from '../battle/types';
+import type { BBuilding, BUnit, SideIndex } from '../battle/types';
 import { CameraRig } from '../input/cameraRig';
 import { Effects } from './effects';
 import { shimmerWater, waterTime } from './water';
@@ -417,7 +417,7 @@ export class BattleView {
     ];
     let rings = 0;
     for (const u of sim.units) {
-      if (u.reserve || u.retreated) continue;
+      if (u.reserve || u.retreated || u.inside !== null) continue;
       const visible = this.visibleToPlayer(u) || (!u.alive && u.stats.isVehicle);
       if (!visible) continue;
       if (!u.alive && !u.stats.isVehicle) continue;
@@ -552,6 +552,11 @@ export class BattleView {
     return { x: ((this.tv.x + 1) / 2) * this.gr.width, y: ((1 - this.tv.y) / 2) * this.gr.height };
   }
 
+  /** Screen position of a structure's footprint (debug / tests / overlays). */
+  buildingScreen(b: BBuilding, lift = 0.5): { x: number; y: number } | null {
+    return this.toScreen(b.x, bHeight(this.t, b.x, b.z) + lift, b.z);
+  }
+
   unitScreen(u: BUnit, lift = 0): { x: number; y: number } | null {
     const top = u.stats.isVehicle ? (u.stats.family === 'tank' ? 4.2 : 3.4) : 3.6;
     return this.toScreen(u.x, bHeight(this.t, u.x, u.z) + top + lift, u.z);
@@ -593,7 +598,7 @@ export class BattleView {
     let best: BUnit | null = null;
     let bd = tol;
     for (const u of this.sim.units) {
-      if (!u.alive || u.retreated || u.reserve || !this.visibleToPlayer(u)) continue;
+      if (!u.alive || u.retreated || u.reserve || u.inside !== null || !this.visibleToPlayer(u)) continue;
       const ground = bHeight(this.t, u.x, u.z);
       for (const lift of [1, 3.5]) {
         const p = this.toScreen(u.x, ground + lift, u.z);

@@ -41,10 +41,12 @@
   touch selection (tap, ALL, TYPE, BOX, double-tap same type) and commands (tap, long-press attack-move,
   HOLD, STOP, FALL BACK); mouse/keyboard RTS controls. **Unit card**: tappable selection grid, single-unit
   details (men, HP, ammo, fuel, weapons and ranges, current order, cover/suppression/ammo flags),
-  follow camera (V) and clear selection.
+  follow camera (V) and clear selection. **Garrisons**: infantry occupy friendly buildings (tap the
+  building; capacity 1–3 squads) for cover, height and concealment; heavy hits and collapses hurt them.
 - **Tactical AI**: memory under fog, recon, tank stand-off/high ground, infantry cover & AT ambushes,
   flanking group, focus fire, fallback, wait-when-outmatched, withdrawal; siege defence; reduces enemy
-  fortifications with the right arm (tanks vs bunkers, infantry vs AT gun pits); missile teams stand off
+  fortifications with the right arm (tanks vs bunkers, infantry vs AT gun pits); siege defenders garrison
+  the buildings facing the attack and tanks shell spotted garrisons; missile teams stand off
   against armour; when contact is lost it probes last-known positions and sweeps the enemy's rear, and a
   beaten remnant withdraws even out of sight (no more stalled draws against a hidden, crippled tank).
 - **Strategic AI**: needs-based build order, staffing/manpower-aware recruitment, raids on outposts,
@@ -66,9 +68,9 @@
   acknowledgements, radio chirps for reports, contact alarm, wind ambience; Sound Off/Low/Medium/High in
   settings, M to mute.
 - **Auto-resolve** runs in time slices with a progress dialog (no main-thread freeze on phones).
-- **Tests**: 76 Vitest unit tests; Playwright smoke tests on phone-landscape touch and desktop mouse profiles
+- **Tests**: 81 Vitest unit tests; Playwright smoke tests on phone-landscape touch and desktop mouse profiles
   (full loop incl. unit card, save/continue, save-slot listing and import; fortified base assault;
-  task force split/merge; founding a base; research lab project switching).
+  task force split/merge; founding a base; research lab project switching; tap-to-garrison in a base battle).
 - **Save schema v5** (Building.repeat in v2, CampaignState.difficulty in v3, research shelf in v4, relief
   landing state per faction in v5) with migrations from v1.
 - **Deployment**: GitHub Actions CI + Pages deploy workflow (gh-pages branch). A single-file build is also
@@ -88,7 +90,8 @@
   The army panel shows fuel range and truck cargo; the map flags LOW FUEL / LOW AMMO.
 - Battle unit separation is simple; large groups can jostle around obstacles. Paths are re-planned when blocked.
 - Infantry squads are drawn as up to 6 figures; there are no death animations (squads shrink).
-- Buildings block movement as circles; no garrisoning of infantry inside buildings.
+- Buildings block movement as circles. Garrisoned squads are invisible as figures (badge only) and fire
+  from the building centre; there is no capturing of enemy buildings by infantry.
 - Only one pending battle at a time; simultaneous contacts are resolved sequentially.
 - Recovery is limited to two relief landings per expedition; after that a side that loses every base
   stays broken (the campaign continues as a sandbox).
@@ -122,7 +125,7 @@ is listed per day), `npm run sim:battle` (`ONLY=<label>` filters matrix lines), 
 1. Logistics depth: convoys that resupply field armies from bases; trucks as convoy escorts/targets.
 2. Defences: let the player see/attack enemy positions from the campaign map (intel), and garrison
    infantry inside bunkers.
-3. Infantry garrisoning buildings in battle (cover + capture mechanics).
+3. Infantry capturing enemy structures in battle; garrisoning bunkers (extra crew).
 4. AI scouting behaviour (recon patrols) to make use of its fog of war; per-difficulty starting bonuses.
 5. Manual supply/population transfers between bases; base specialisation.
 6. Battle simulation in a Web Worker; spatial hash for targeting.

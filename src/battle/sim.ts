@@ -42,8 +42,17 @@ const VIS_INTERVAL = 0.25;
 const EXIT_MARGIN = 22;
 
 export function eyeHeight(u: BUnit): number {
+  if (u.inside !== null) return GARRISON_EYE;
   return u.stats.isVehicle ? 2.8 : 1.8;
 }
+
+/** Garrisoned infantry: eye/firing height (m), protection, harder to hit, collapse damage (share of max HP). */
+const GARRISON_EYE = 4.5;
+export const GARRISON_COVER = 0.6;
+const GARRISON_HIT = 0.55;
+const GARRISON_COLLAPSE = 0.45;
+/** Share of the damage a structure takes that reaches each squad inside it. */
+const GARRISON_SPILL = 0.06;
 
 export function isActive(u: BUnit): boolean {
   return u.alive && !u.retreated && !u.reserve;
@@ -294,6 +303,7 @@ export class BattleSim {
       kills: 0,
       task: '',
       menStart: spec.men,
+      inside: null,
     };
   }
 
@@ -453,6 +463,31 @@ export class BattleSim {
     return !!b && !b.destroyed && b.side !== u.side;
   }
 
+  /** Squads a structure can hold right now (0 for destroyed, unfinished or unsuitable buildings). */
+  garrisonCapacity(b: BBuilding): number {
+    if (b.destroyed || b.spec.state !== 'active') return 0;
+    return BUILDINGS[b.spec.typeId].garrison ?? 0;
+  }
+
+  /** Units garrisoned in a structure. */
+  occupants(b: BBuilding): BUnit[] {
+    return this.units.filter((u) => u.inside === b.id && isActive(u));
+  }
+
+  /** Can this unit garrison that structure (own side, infantry, room left)? */
+  canGarrison(u: BUnit, b: BBuilding): boolean {
+    if (u.stats.isVehicle || u.stats.family !== 'infantry' || b.side !== u.side) return false;
+    if (u.inside === b.id) return true;
+    const cap = this.garrisonCapacity(b);
+    if (cap <= 0) return false;
+    let taken = 0;
+    for (const o of this.units) {
+      if (o === u || !isActive(o)) continue;
+      if (o.inside === b.id || (o.order.type === 'garrison' && o.order.buildingId === b.id)) taken++;
+    }
+    return taken < cap;
+  }
+
   maxRange(u: BUnit): number {
     let r = 0;
     for (const w of u.stats.weapons) r = Math.max(r, w.range);
@@ -466,6 +501,7 @@ export class BattleSim {
   orderMove(ids: number[], x: number, z: number, attackMove: boolean): void {
     const list = ids.map((id) => this.unitById(id)).filter((u): u is BUnit => !!u && isActive(u));
     if (!list.length) return;
+    for (const u of list) if (u.inside !== null) this.leaveBuilding(u, x, z);
     let cx = 0;
     let cz = 0;
     for (const u of list) {
@@ -499,6 +535,11 @@ export class BattleSim {
     for (const id of ids) {
       const u = this.unitById(id);
       if (!u || !isActive(u) || !this.targetValid(u, target)) continue;
+      if (u.inside !== null) {
+        // fire from the building while the target is within reach, otherwise go after it
+        const p = this.targetPos(target)!;
+        if (dist(u.x, u.z, p.x, p.z) > this.engageRange(u, target) * 1.05) this.leaveBuilding(u, p.x, p.z);
+      }
       u.order = { type: 'attack', target };
       u.target = target;
       u.path = [];
@@ -528,10 +569,60 @@ export class BattleSim {
     for (const id of ids) {
       const u = this.unitById(id);
       if (!u || !isActive(u)) continue;
+      if (u.inside !== null) {
+        const e = this.setup.sides[u.side].entry;
+        this.leaveBuilding(u, u.x - e.dirX * 100, u.z - e.dirZ * 100);
+      }
       u.order = { type: 'retreat' };
       const exit = this.exitPoint(u.side, u.x, u.z);
       this.planPath(u, exit.x, exit.z);
     }
+  }
+
+  /** Send infantry into a friendly structure; units that cannot (vehicles, no room) are left alone. */
+  orderGarrison(ids: number[], buildingId: number): number {
+    const b = this.buildingById(buildingId);
+    if (!b) return 0;
+    let n = 0;
+    for (const id of ids) {
+      const u = this.unitById(id);
+      if (!u || !isActive(u) || !this.canGarrison(u, b)) continue;
+      n++;
+      if (u.inside === b.id) continue;
+      if (u.inside !== null) this.leaveBuilding(u, b.x, b.z);
+      u.order = { type: 'garrison', buildingId: b.id };
+      u.target = null;
+      const edge = this.buildingEdge(b, u.x, u.z);
+      this.planPath(u, edge.x, edge.z);
+    }
+    return n;
+  }
+
+  /** A free spot just outside a structure, on the side facing (x, z). */
+  private buildingEdge(b: BBuilding, x: number, z: number): { x: number; z: number } {
+    const dx = x - b.x;
+    const dz = z - b.z;
+    const l = Math.hypot(dx, dz) || 1;
+    return this.freeSpot(b.x + (dx / l) * (b.radius + 3), b.z + (dz / l) * (b.radius + 3));
+  }
+
+  private enterBuilding(u: BUnit, b: BBuilding): void {
+    u.inside = b.id;
+    u.x = b.x;
+    u.z = b.z;
+    u.path = [];
+    u.speedNow = 0;
+    u.order = { type: 'hold' };
+  }
+
+  /** Step out of the structure on the side facing (towardX, towardZ). */
+  private leaveBuilding(u: BUnit, towardX: number, towardZ: number): void {
+    const b = u.inside !== null ? this.buildingById(u.inside) : undefined;
+    u.inside = null;
+    if (!b) return;
+    const p = this.buildingEdge(b, towardX, towardZ);
+    u.x = p.x;
+    u.z = p.z;
   }
 
   /** The map-edge point a side retreats to. */
@@ -654,6 +745,23 @@ export class BattleSim {
 
   private updateOrder(u: BUnit): void {
     const o = u.order;
+    if (o.type === 'garrison') {
+      const b = this.buildingById(o.buildingId);
+      if (!b || !this.canGarrison(u, b)) {
+        u.order = { type: 'idle' };
+        u.path = [];
+        return;
+      }
+      if (dist(u.x, u.z, b.x, b.z) <= b.radius + 7) {
+        this.enterBuilding(u, b);
+        return;
+      }
+      if (u.path.length === 0) {
+        const edge = this.buildingEdge(b, u.x, u.z);
+        this.planPath(u, edge.x, edge.z);
+      }
+      return;
+    }
     if (o.type === 'attack') {
       if (!this.targetValid(u, o.target)) {
         u.order = { type: 'idle' };
@@ -804,6 +912,14 @@ export class BattleSim {
   }
 
   private move(u: BUnit, dt: number): void {
+    if (u.inside !== null) {
+      u.inForest = false;
+      u.cover = GARRISON_COVER;
+      u.speedNow = 0;
+      u.path = [];
+      if (u.target) this.faceTarget(u, dt);
+      return;
+    }
     const t = this.terrain;
     const cell = bCell(t, u.x, u.z);
     u.inForest = t.forest[cell] > 100;
@@ -907,7 +1023,7 @@ export class BattleSim {
   }
 
   private separate(): void {
-    const list = this.units.filter(isActive);
+    const list = this.units.filter((u) => isActive(u) && u.inside === null);
     for (let i = 0; i < list.length; i++) {
       const a = list[i];
       for (let j = i + 1; j < list.length; j++) {
@@ -1045,6 +1161,10 @@ export class BattleSim {
       target = this.unitById(t.id)!;
       toY = bHeight(this.terrain, target.x, target.z) + (target.stats.isVehicle ? 1.6 : 0.9);
       if (!target.stats.isVehicle && target.inForest) hitChance *= 0.62;
+      if (target.inside !== null) {
+        hitChance *= GARRISON_HIT;
+        toY += 2.5;
+      }
       if (target.stats.family === 'tank') hitChance *= 1.15;
       if (target.stats.family === 'light_vehicle' && target.speedNow > 6) hitChance *= 0.72;
     } else {
@@ -1108,6 +1228,12 @@ export class BattleSim {
     }
     if (!hit) return;
     let dmg = w.damage * src.menFactor;
+    if (heavy && target.inside !== null) {
+      // high explosive aimed at a garrison wrecks the structure around it
+      const shelter = this.buildingById(target.inside);
+      if (shelter) this.damageBuilding(shelter, w.damage * w.vsStructure * 0.35);
+      if (!target.alive || target.inside === null) return;
+    }
     if (target.stats.isVehicle) {
       // directional armour: front 100%, side 55%, rear 35%
       const incoming = Math.atan2(src.x - target.x, src.z - target.z);
@@ -1265,12 +1391,23 @@ export class BattleSim {
   damageBuilding(b: BBuilding, dmg: number): void {
     if (b.destroyed) return;
     b.hp -= dmg;
+    const inside = this.units.length ? this.occupants(b) : [];
     if (b.hp <= 0) {
       b.hp = 0;
       b.destroyed = true;
       this.events.push({ type: 'building_destroyed', id: b.id, x: b.x, z: b.z });
       this.events.push({ type: 'explosion', x: b.x, y: bHeight(this.terrain, b.x, b.z) + 4, z: b.z, size: 3, delay: 0 });
+      // the garrison is buried or blown out of the ruins
+      for (const u of inside) {
+        const e = this.setup.sides[u.side].entry;
+        this.leaveBuilding(u, u.x - e.dirX * 50, u.z - e.dirZ * 50);
+        u.order = { type: 'idle' };
+        u.suppression = 1;
+        this.damageUnit(u, u.stats.maxHp * GARRISON_COLLAPSE, null);
+      }
+      return;
     }
+    for (const u of inside) this.damageUnit(u, dmg * GARRISON_SPILL, null);
   }
 
   // ---------------------------------------------------------------------------
@@ -1302,7 +1439,9 @@ export class BattleSim {
           continue;
         }
         let conceal = 1;
-        if (!e.stats.isVehicle) {
+        if (e.inside !== null) {
+          conceal = 0.5;
+        } else if (!e.stats.isVehicle) {
           conceal = e.inForest ? 0.42 : e.speedNow < 0.3 ? 0.9 : 1;
         } else if (e.inForest) {
           conceal = 0.8;
@@ -1311,7 +1450,8 @@ export class BattleSim {
         let seen = false;
         for (const f of eyes) {
           const spotBoost = 1 + f.stats.spotting * (1 - conceal);
-          const r = f.stats.vision * conceal * spotBoost * this.nightSight(dark, f.stats.nightVision);
+          const perch = f.inside !== null ? 1.15 : 1;
+          const r = f.stats.vision * perch * conceal * spotBoost * this.nightSight(dark, f.stats.nightVision);
           const dx = e.x - f.x;
           const dz = e.z - f.z;
           if (dx * dx + dz * dz > r * r) continue;

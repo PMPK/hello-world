@@ -200,7 +200,7 @@ export class BattleMode implements Mode, BattleController {
     o.clear();
     const far = this.view.rig.dist > 260;
     for (const u of this.sim.units) {
-      if (!isActive(u)) continue;
+      if (!isActive(u) || u.inside !== null) continue; // garrisons are shown on their building
       const friendly = u.side === this.playerSide;
       if (!friendly && !u.seenBy[this.playerSide]) continue;
       const p = this.view.unitScreen(u, far ? 4 : 1.5);
@@ -251,10 +251,23 @@ export class BattleMode implements Mode, BattleController {
         }
         continue;
       }
+      const friendlyB = b.side === this.playerSide;
+      // garrison badge: ours always, theirs once spotted; free room while infantry is selected
+      const inside = this.sim.occupants(b).filter((u) => friendlyB || u.seenBy[this.playerSide]);
+      const cap = this.sim.garrisonCapacity(b);
+      const showRoom = friendlyB && cap > 0 && this.selectionHasInfantry();
+      if (inside.length || showRoom) {
+        const p = this.view.toScreen(b.x, bHeight(this.sim.terrain, b.x, b.z) + 16, b.z);
+        if (p) {
+          const sel = inside.some((u) => this.selected.has(u.id));
+          const text = friendlyB ? `GARRISON ${inside.length}/${cap}` : `GARRISON ${inside.length}`;
+          o.label(p.x, p.y - 10, sel ? `▶ ${text}` : text, friendlyB ? FRIEND : FOE, 9);
+        }
+      }
       if (hpF >= 0.999 && !far) continue;
       const p = this.view.toScreen(b.x, bHeight(this.sim.terrain, b.x, b.z) + 22, b.z);
       if (!p) continue;
-      o.bar(p.x, p.y, 34, hpF, b.side === this.playerSide ? FRIEND : FOE, 3);
+      o.bar(p.x, p.y, 34, hpF, friendlyB ? FRIEND : FOE, 3);
     }
     const now = this.sim.time;
     this.orderMarks = this.orderMarks.filter((m) => now - m.t < 1.2 || this.sim.finished);
@@ -358,6 +371,32 @@ export class BattleMode implements Mode, BattleController {
         this.app.audio.ui('confirm');
         return;
       }
+      if (b.side === this.playerSide && !commandButton && !this.selected.size) {
+        // tapping one of our buildings selects its garrison
+        const inside = this.sim.occupants(b);
+        if (inside.length) {
+          for (const u of inside) this.selected.add(u.id);
+          this.syncSelection();
+        }
+        return;
+      }
+      if (b.side === this.playerSide && this.selected.size) {
+        // infantry occupy the building (as many as it holds); everyone else moves next to it
+        const ids = [...this.selected];
+        const sent = this.sim.orderGarrison(ids, b.id);
+        const rest = ids.filter((id) => {
+          const u = this.sim.unitById(id);
+          return !!u && u.inside !== b.id && !(u.order.type === 'garrison' && u.order.buildingId === b.id);
+        });
+        const g = this.view.groundAt(sx, sy);
+        if (rest.length && g) this.sim.orderMove(rest, g.x, g.z, this.attackMoveMode);
+        if (sent || rest.length) {
+          this.orderMarks.push({ x: b.x, z: b.z, t: this.sim.time, attack: false });
+          this.app.audio.ui('confirm');
+        }
+        if (sent < ids.filter((id) => this.sim.unitById(id)?.stats.family === 'infantry').length) this.hud.toast(sent ? 'The building is full — the rest wait outside.' : 'No room in that building.');
+        return;
+      }
       if (this.selected.size) {
         const g = this.view.groundAt(sx, sy);
         if (g) this.issueMove(g.x, g.z, this.attackMoveMode);
@@ -388,6 +427,11 @@ export class BattleMode implements Mode, BattleController {
       this.attackMoveMode = false;
       this.hud.update();
     }
+  }
+
+  private selectionHasInfantry(): boolean {
+    for (const id of this.selected) if (this.sim.unitById(id)?.stats.family === 'infantry') return true;
+    return false;
   }
 
   private syncSelection(): void {

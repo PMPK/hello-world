@@ -170,7 +170,8 @@ test('full loop: campaign → move army → tactical battle → back to campaign
   expect(errors, errors.join('\n')).toEqual([]);
 });
 
-test('base assault battle contains the base buildings', async ({ page }) => {
+test('base assault battle contains the base buildings', async ({ page }, info) => {
+  const touch = info.project.name.includes('touch');
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto('/');
@@ -199,6 +200,35 @@ test('base assault battle contains the base buildings', async ({ page }) => {
       .sort(),
   );
   for (const id of campaignBuildings) expect(battleBuildings).toContain(id);
+
+  // garrison: select one infantry squad and tap one of our buildings that has room
+  const pick = await px(page, (p) => {
+    const sim = p.battle();
+    const side = p.app.battle.playerSide;
+    const squad = sim.units.find((u: any) => u.side === side && u.alive && !u.reserve && u.stats.family === 'infantry');
+    const mine = sim.buildings.filter((b: any) => b.side === side && sim.garrisonCapacity(b) > 0);
+    // the building least crowded by units, so the tap lands on the structure
+    const clear = (b: any): number => Math.min(...sim.units.filter((u: any) => u.alive && !u.reserve).map((u: any) => Math.hypot(u.x - b.x, u.z - b.z)));
+    const b = mine.sort((a: any, c: any) => clear(c) - clear(a))[0];
+    p.app.battle.speed = 0;
+    p.app.battle.selectOnly(squad.id);
+    p.app.battle.view.rig.focus(b.x, b.z, 140);
+    return { squad: squad.id, building: b.id };
+  });
+  await page.waitForTimeout(1500);
+  const at = await page.evaluate((id) => {
+    const p = (window as any).__PX;
+    const b = p.battle().buildings.find((x: any) => x.id === id);
+    return p.app.battle.view.buildingScreen(b);
+  }, pick.building);
+  expect(at).toBeTruthy();
+  await tap(page, at!.x, at!.y, touch);
+  const order = await page.evaluate((id) => {
+    const u = (window as any).__PX.battle().units.find((x: any) => x.id === id);
+    return { type: u.order.type, building: u.order.buildingId ?? u.inside };
+  }, pick.squad);
+  expect(order.type === 'garrison' || order.type === 'hold').toBe(true);
+  expect(order.building).toBe(pick.building);
   expect(errors).toEqual([]);
 });
 

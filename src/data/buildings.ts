@@ -82,6 +82,8 @@ export interface BuildingTypeDef {
   footprint: number;
   /** Footprint radius in tactical battle (metres). */
   battleFootprint: number;
+  /** Infantry squads that can garrison the structure in a battle (0/absent = none). */
+  garrison?: number;
   buildable: boolean;
   maxPerBase?: number;
   /** Importance for AI targeting / defence (0..1). */
@@ -108,6 +110,7 @@ export const BUILDINGS: Record<BuildingTypeId, BuildingTypeDef> = {
     storage: { minerals: 300, hydrocarbons: 300, food: 300, refined: 300, components: 300, fuel: 300, ammo: 300 },
     footprint: 1.7,
     battleFootprint: 22,
+    garrison: 3,
     buildable: false,
     maxPerBase: 1,
     importance: 1,
@@ -127,6 +130,7 @@ export const BUILDINGS: Record<BuildingTypeId, BuildingTypeDef> = {
     housing: 30,
     footprint: 1.2,
     battleFootprint: 14,
+    garrison: 2,
     buildable: true,
     importance: 0.4,
     model: 'habitat',
@@ -147,6 +151,7 @@ export const BUILDINGS: Record<BuildingTypeId, BuildingTypeDef> = {
     storage: { hydrocarbons: 100 },
     footprint: 1.3,
     battleFootprint: 16,
+    garrison: 1,
     buildable: true,
     importance: 0.75,
     model: 'power_plant',
@@ -211,6 +216,7 @@ export const BUILDINGS: Record<BuildingTypeId, BuildingTypeDef> = {
     ],
     footprint: 1.35,
     battleFootprint: 17,
+    garrison: 1,
     buildable: true,
     importance: 0.7,
     model: 'refinery',
@@ -239,6 +245,7 @@ export const BUILDINGS: Record<BuildingTypeId, BuildingTypeDef> = {
     ],
     footprint: 1.5,
     battleFootprint: 19,
+    garrison: 2,
     buildable: true,
     importance: 0.85,
     model: 'factory',
@@ -257,6 +264,7 @@ export const BUILDINGS: Record<BuildingTypeId, BuildingTypeDef> = {
     produces: 'infantry',
     footprint: 1.3,
     battleFootprint: 16,
+    garrison: 2,
     buildable: true,
     maxPerBase: 2,
     importance: 0.6,
@@ -277,6 +285,7 @@ export const BUILDINGS: Record<BuildingTypeId, BuildingTypeDef> = {
     storage: { fuel: 50, ammo: 50 },
     footprint: 1.6,
     battleFootprint: 21,
+    garrison: 2,
     buildable: true,
     maxPerBase: 2,
     importance: 0.9,
@@ -297,6 +306,7 @@ export const BUILDINGS: Record<BuildingTypeId, BuildingTypeDef> = {
     research: 1,
     footprint: 1.2,
     battleFootprint: 15,
+    garrison: 1,
     buildable: true,
     maxPerBase: 1,
     importance: 0.65,

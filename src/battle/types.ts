@@ -95,7 +95,9 @@ export type UnitOrder =
   | { type: 'move'; x: number; z: number; attackMove: boolean }
   | { type: 'attack'; target: TargetRef }
   | { type: 'hold' }
-  | { type: 'retreat' };
+  | { type: 'retreat' }
+  /** Infantry: walk to a friendly building and occupy it. */
+  | { type: 'garrison'; buildingId: number };
 
 export interface BUnit {
   id: number;
@@ -136,6 +138,8 @@ export interface BUnit {
   /** AI task label (debug / future UI). */
   task: string;
   menStart: number;
+  /** Building the (infantry) unit is garrisoned in, or null. Position is the building centre while inside. */
+  inside: number | null;
 }
 
 /** Weapon state of a crewed defensive structure. */

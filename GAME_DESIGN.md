@@ -249,6 +249,14 @@ alien technology, cybernetics, consciousness transfer, vehicles and mechs are re
   to soldiers (casualties remove men); cover in forests and near friendly buildings; suppression slows
   and degrades infantry.
 - **Ammo and fuel** are tracked per unit and written back to the campaign.
+- **Garrisons**: infantry (rifle squads, ATGM teams) can occupy their own side's structures — HQ 3 squads;
+  habitat, factory, barracks, vehicle depot 2; power plant, refinery, research lab 1. Inside they fire from
+  4.5 m up (longer sight), take 60% less damage and are hit about half as often, and stay concealed until
+  they fire. Heavy rounds aimed at a garrison also damage the building, every hit on the building hurts
+  the squads inside a little, and a collapse injures them badly and throws them out (suppressed). A move
+  order brings them out. Tap one of your buildings with infantry selected to garrison it (vehicles move
+  next to it); tap it with nothing selected to select its garrison. GARRISON n/cap badges mark occupied
+  buildings (enemy garrisons once spotted).
 - **Structures** take damage (explicit orders, AI demolition of military production in sieges, and stray
   heavy rounds) and can be destroyed. **Defensive positions** acquire targets, traverse and fire on their
   own, are engaged automatically by enemy units that can hurt them (armour, target profile and crew
@@ -267,7 +275,8 @@ the enemy was, so a beaten remnant still pulls out after losing sight of it). Wh
 units close in on last-known positions (a spot reached with nothing in sight is written off), then sweep
 the enemy's half of the field and its rear, where damaged vehicles limp to. Missile teams hold in cover at
 ~85% of missile range from enemy armour and fight as riflemen when only infantry is around. Siege defenders hold
-around their buildings and counter-attack when clearly superior. Enemy defences are always known: tanks
+around their buildings, man the structures facing the attack (garrisons) and counter-attack when clearly
+superior; attacking tanks shell buildings with a spotted garrison. Enemy defences are always known: tanks
 shell bunkers (then gun pits), infantry rush exposed AT gun pits that cannot fire back at them, AT-armed
 infantry take on bunkers only when no tanks are left, and jeeps keep clear of fortifications.
 
