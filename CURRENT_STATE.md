@@ -35,6 +35,15 @@
   return; named commanders. **Supply trucks** keep task forces fuelled and armed in the field (pooled fuel
   range, extra rations, cargo shown in the army panel) and rearm nearby units in battle.
 - **Diplomacy**: standoff with rising tension → AI goes weapons-free at 100%; player attacks start hostilities.
+- **Transfers**: hand-sent convoys between your bases (base panel → Send convoy…): up to 120 units of
+  stock plus 12 colonists, along roads or cross-country, interceptable; arrival reported in the log.
+- **Recovery**: an expedition that loses every base gets a relief landing from Earth 3 days later (max
+  twice): finished HQ/habitat/agri-dome, 30 colonists, supplies, two squads, on safe free ground. NO BASE
+  chip with the countdown in the top bar; the camera jumps to the new base.
+- **Expansion**: found new bases (base panel → Found new base…, pick a site on the map): colonists,
+  starter supplies and a prefab command post leave the founding base; the terrain is flattened at
+  runtime; a road links the bases and **supply convoys** keep the young base stocked. The AI founds a
+  second base once established. Field-camp housing/storage until the HQ is assembled.
 - **Battles**: battlefield generated from the campaign terrain; base buildings mapped in at real positions;
   deployment from approach direction; fog of war with LOS and concealment; directional armour; cover;
   suppression; ammo & fuel; reserves; building damage/destruction; withdraw; end battle; minimap;
@@ -86,13 +95,13 @@
 - **Deployment**: GitHub Actions CI + Pages deploy workflow (gh-pages branch). A single-file build is also
   published as a claude.ai Artifact (https://claude.ai/artifact/7qGUMq5vWjnaNKRHEyempW).
 
-## Deployment status (end of the MVP session)
+## Deployment status
 
-- The Claude GitHub App had **no write access** to `PMPK/hello-world` (git push and the GitHub connector both
-  returned 403), so the MVP commits could not be pushed from the session. The full history was handed over as
-  a git bundle. Once access exists (or the bundle is pushed by hand), pushing `claude/planet-x-mvp-1f1t2m`
-  and/or `main` triggers the deploy workflow.
-- GitHub Pages must be switched on once: *Settings → Pages → Source: Deploy from a branch → gh-pages / (root)*.
+- Code is on GitHub: development branch `claude/planet-x-mvp-1f1t2m`; `main` is fast-forwarded to it after
+  CI passes. Every push to `main` (and the development branch) runs the Pages deploy workflow.
+- GitHub Pages must be switched on once: *Settings → Pages → Source: Deploy from a branch → gh-pages / (root)*
+  — then the game is at https://pmpk.github.io/hello-world/.
+- Handoff for other agents (Codex): [AGENTS.md](AGENTS.md) and [HANDOFF.md](HANDOFF.md).
 
 ## Known issues / limitations
 
@@ -108,18 +117,8 @@
 - Audio is procedural and minimal (no music, no voice lines); browsers start it only after the first tap/key.
 - Defences only fight inside the 800 m battlefield around the contact point; positions have no firing arcs
   (they traverse freely) and silenced positions are re-crewed by the economy after the battle.
-- Headless Chromium uses SwiftShader in tests; real-device performance has been budgeted (≈100k triangles on
-  medium) but not profiled on a physical phone in this session.
-
-- **Transfers**: hand-sent convoys between your bases (base panel → Send convoy…): up to 120 units of
-  stock plus 12 colonists, along roads or cross-country, interceptable; arrival reported in the log.
-- **Recovery**: an expedition that loses every base gets a relief landing from Earth 3 days later (max
-  twice): finished HQ/habitat/agri-dome, 30 colonists, supplies, two squads, on safe free ground. NO BASE
-  chip with the countdown in the top bar; the camera jumps to the new base.
-- **Expansion**: found new bases (base panel → Found new base…, pick a site on the map): colonists,
-  starter supplies and a prefab command post leave the founding base; the terrain is flattened at
-  runtime; a road links the bases and **supply convoys** keep the young base stocked. The AI founds a
-  second base once established. Field-camp housing/storage until the HQ is assembled.
+- Headless Chromium uses SwiftShader in tests; real-device performance has been budgeted and measured in
+  headless Chromium (see ARCHITECTURE.md) but not profiled on a physical phone.
 
 ## Unfinished systems (extension points only)
 
@@ -142,4 +141,5 @@ is listed per day), `npm run sim:battle` (`ONLY=<label>` filters matrix lines), 
 5. Base specialisation; standing transfer orders (repeat a convoy) and convoy escorts.
 6. Battle simulation in a Web Worker; spatial hash for targeting.
 7. Audio polish: music stems, distant battle rumble on the campaign map, per-faction radio voices.
-8. Tutorial scenario using the directive system in `CampaignHud.updateDirective`.
+8. Guided first-hour scenario on top of the directive system (`CampaignHud.updateDirective`) and the
+   battle tips card (`src/ui/help.ts`).
