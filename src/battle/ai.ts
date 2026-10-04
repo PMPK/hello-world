@@ -323,7 +323,9 @@ export class TacticalAI {
     const sim = this.sim;
     const taken = new Set<number>();
     for (const u of inf) if (u.inside !== null || u.order.type === 'garrison') taken.add(u.id);
-    const free = inf.filter((u) => !taken.has(u.id) && u.order.type !== 'retreat' && u.task !== 'rearm');
+    const free = inf.filter(
+      (u) => !taken.has(u.id) && u.order.type !== 'retreat' && u.task !== 'rearm' && !(u.order.type === 'attack' && sim.targetValid(u, u.order.target)),
+    );
     if (!free.length) return taken;
     const shelters = sim.buildings
       .filter((b) => b.side === this.side && sim.garrisonCapacity(b) > 0)

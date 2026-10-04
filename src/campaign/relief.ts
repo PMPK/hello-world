@@ -26,6 +26,8 @@ export const RELIEF_DELAY = 72;
 export const MAX_RELIEF_LANDINGS = 2;
 export const RELIEF_COLONISTS = 30;
 export const RELIEF_SUPPLIES: PartialStock = { minerals: 140, hydrocarbons: 40, food: 120, refined: 90, components: 24, fuel: 40, ammo: 50 };
+/** Campaign step length (h); mirrors SIM_STEP in sim.ts (imported there, so not imported here). */
+const SIM_STEP_HOURS = 0.1;
 /** Keep the landing at least this far (km) from hostile bases and forces. */
 const SAFE_DISTANCE = 90;
 
@@ -51,6 +53,8 @@ export function stepRelief(ctx: SimContext): void {
       continue;
     }
     if (f.reliefLandings >= MAX_RELIEF_LANDINGS || state.time - f.baselessSince < RELIEF_DELAY) continue;
+    // the full-map site search is costly: look once at the start of every hour
+    if (state.time % 1 >= SIM_STEP_HOURS) continue;
     const site = findReliefSite(state, world, f.id);
     if (!site) continue; // try again on a later step
     const base = landRelief(ctx, f.id, site.x, site.z);

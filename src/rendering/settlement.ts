@@ -19,6 +19,8 @@ import { TANK_TURRET_HEIGHT } from './models/units';
 const PEOPLE_PER_HUT = 4;
 const MAX_HUTS_PER_BASE = 40;
 const MAX_PARKED_PER_BASE = 24;
+/** Instance buffers are sized for this many bases (four per expedition, captures, relief landings). */
+const MAX_BASES = 12;
 
 function buildHut(): THREE.BufferGeometry {
   const b = new ModelBuilder();
@@ -64,7 +66,7 @@ export class Settlements {
     private readonly vehicleScale: number,
     private readonly showVehicles: boolean,
   ) {
-    this.huts = new THREE.InstancedMesh(buildHut(), Materials.standard, 4 * MAX_HUTS_PER_BASE + 8);
+    this.huts = new THREE.InstancedMesh(buildHut(), Materials.standard, MAX_BASES * MAX_HUTS_PER_BASE);
     this.huts.count = 0;
     this.huts.castShadow = true;
     this.huts.receiveShadow = true;
@@ -74,7 +76,7 @@ export class Settlements {
     const tank = mergeGeometries([Models.tankHull('#ffffff'), turret]);
     turret.dispose();
     const make = (g: THREE.BufferGeometry): THREE.InstancedMesh => {
-      const im = new THREE.InstancedMesh(g, Materials.standard, 4 * MAX_PARKED_PER_BASE);
+      const im = new THREE.InstancedMesh(g, Materials.standard, MAX_BASES * MAX_PARKED_PER_BASE);
       im.count = 0;
       im.castShadow = true;
       scene.add(im);
@@ -94,7 +96,7 @@ export class Settlements {
     const key = bases
       .map((b) => {
         const seen = b.factionId === state.playerFactionId || isVisible(b.x, b.z);
-        const parked = seen ? b.garrison.map((u) => u.designId[0]).join('') : '';
+        const parked = seen ? b.garrison.map((u) => u.designId).join(',') : '';
         return `${b.id}:${b.factionId}:${Math.floor(b.population / PEOPLE_PER_HUT)}:${this.structureKey(state, b)}:${parked}`;
       })
       .join('|');
@@ -123,10 +125,11 @@ export class Settlements {
     im.computeBoundingSphere();
   }
 
-  private structureKey(state: CampaignState, base: Base): number {
-    let n = 0;
-    for (const b of Object.values(state.buildings)) if (b.baseId === base.id && b.state !== 'destroyed') n++;
-    return n;
+  /** Which structures stand and in what state (a finished depot moves the vehicle park). */
+  private structureKey(state: CampaignState, base: Base): string {
+    let key = '';
+    for (const b of Object.values(state.buildings)) if (b.baseId === base.id) key += `${b.id}${b.state[0]};`;
+    return key;
   }
 
   /** Circles (x, z, r) the settlement keeps clear of: structures and the HQ plaza. */
@@ -263,9 +266,12 @@ export class Settlements {
   }
 
   dispose(): void {
+    // the hut and merged tank geometries are ours; jeep and truck geometries belong to the model cache
     this.huts.geometry.dispose();
-    this.huts.removeFromParent();
     this.parked.tank.geometry.dispose();
-    for (const im of Object.values(this.parked)) im.removeFromParent();
+    for (const im of [this.huts, ...Object.values(this.parked)]) {
+      im.removeFromParent();
+      im.dispose(); // instance matrix / colour buffers
+    }
   }
 }

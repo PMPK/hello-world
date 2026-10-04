@@ -80,6 +80,23 @@ describe('garrisoning buildings', () => {
     expect(dist(u.x, u.z, hab.x, hab.z)).toBeGreaterThan(hab.radius);
   });
 
+  it('a garrison ordered to attack a target out of reach comes out after it', () => {
+    const c = freshCampaign();
+    const sim = setupSim(c, { recon_jeep: 1 }, 1);
+    const hab = habitat(sim);
+    const [u] = defenders(sim);
+    sim.orderGarrison([u.id], hab.id);
+    runUntil(sim, () => u.inside !== null, 90);
+    const jeep = sim.units.find((e) => e.side === 0)!;
+    jeep.x = hab.x + 400;
+    jeep.z = hab.z;
+    jeep.seenBy[1] = true;
+    sim.orderAttack([u.id], { kind: 'unit', id: jeep.id });
+    sim.step(0.2);
+    expect(u.inside).toBeNull();
+    expect(u.order.type).toBe('attack');
+  });
+
   it('a collapsing building hurts and ejects its garrison', () => {
     const c = freshCampaign();
     const sim = setupSim(c, { recon_jeep: 1 }, 1);

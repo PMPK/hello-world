@@ -592,7 +592,10 @@ function thinkPatrol(ctx: SimContext, army: Army, hostile: boolean): void {
   const { state, rng } = ctx;
   const fid = army.factionId;
   const home = (army.homeBaseId && state.bases[army.homeBaseId]?.factionId === fid ? state.bases[army.homeBaseId] : null) ?? basesOf(state, fid)[0];
-  if (!home || !armyReady(army)) {
+  const range = fuelRange(army.units);
+  const homeDist = home ? dist(army.x, army.z, home.x, home.z) : 0;
+  // turn back while the tanks still hold the way home (with a margin for detours)
+  if (!home || !armyReady(army) || range < homeDist * 1.3 + 20) {
     if (army.order.type !== 'return' && home) orderReturn(ctx, army.id);
     return;
   }
@@ -638,7 +641,10 @@ function thinkPatrol(ctx: SimContext, army: Army, hostile: boolean): void {
     }
   }
   if (army.order.type !== 'idle') return;
-  const pts = patrolPoints(state, fid, home, hostile).filter((p) => dist(p.x, p.z, army.x, army.z) > 12);
+  const pts = patrolPoints(state, fid, home, hostile).filter((p) => {
+    const leg = dist(p.x, p.z, army.x, army.z);
+    return leg > 12 && (leg + dist(p.x, p.z, home.x, home.z)) * 1.3 + 20 < range;
+  });
   const next = pts.length ? pts[rng.int(0, pts.length - 1)] : null;
   if (!next || !orderMove(ctx, army.id, next.x, next.z)) orderReturn(ctx, army.id);
 }

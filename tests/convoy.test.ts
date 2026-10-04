@@ -82,6 +82,20 @@ describe('hand-sent convoys', () => {
     expect(c.state.log.some((l) => l.text.includes('4 colonists were lost'))).toBe(true);
   });
 
+  it('turns back to a base we still hold when the destination falls', () => {
+    const { c, home, colony } = twoBases();
+    for (const id of Object.keys(c.state.roads)) delete c.state.roads[id];
+    const r = sendConvoy(c, home.id, colony.id, { food: 20 }, 4);
+    expect(r.ok).toBe(true);
+    runConvoys(c, 0.5);
+    colony.factionId = c.enemy; // captured while the convoy is on the road
+    const pop = home.population;
+    runConvoys(c, 30);
+    expect(Object.keys(c.state.convoys).length).toBe(0);
+    expect(home.population).toBe(pop + 4);
+    expect(c.state.log.some((l) => l.text.includes(`turning back to ${home.name}`))).toBe(true);
+  });
+
   it('old saves gain empty seats on convoys in flight (v5 → v6)', () => {
     const { c, home, colony } = twoBases();
     sendConvoy(c, home.id, colony.id, { food: 10 }, 0);

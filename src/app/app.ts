@@ -85,6 +85,8 @@ export class App {
   private mode: Mode | null = null;
   campaign: CampaignMode | null = null;
   private errorStreak = 0;
+  /** Set when the loop stopped on repeated errors: the broken state must never overwrite a save. */
+  private faulted = false;
   battle: BattleMode | null = null;
   private menuScreen: HTMLElement | null = null;
   private last = performance.now();
@@ -166,6 +168,7 @@ export class App {
   /** Stop the loop's mode and let the player leave safely (the last autosave is untouched). */
   private crashed(err: unknown): void {
     this.errorStreak = 0;
+    this.faulted = true;
     this.mode = null;
     const msg = err instanceof Error ? err.message : String(err);
     this.ui.querySelectorAll('.modal-back').forEach((m) => m.remove());
@@ -202,6 +205,7 @@ export class App {
   // ---------------------------------------------------------------------------
 
   async showMenu(): Promise<void> {
+    this.faulted = false;
     this.battle?.dispose();
     this.battle = null;
     this.campaign?.dispose();
@@ -404,7 +408,7 @@ export class App {
 
   async save(slot: SaveSlot, silent = false): Promise<void> {
     const c = this.campaign;
-    if (!c || this.saving) return;
+    if (!c || this.saving || this.faulted) return;
     this.saving = true;
     try {
       await this.saves.save(c.state, slot);

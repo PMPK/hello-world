@@ -61,6 +61,28 @@ describe('AI recon patrols', () => {
     expect(aim).toBe(true);
   });
 
+  it('turns back while the fuel still covers the way home', () => {
+    const c = freshCampaign();
+    const p = untilPatrol(c);
+    const home = basesOf(c.state, c.enemy)[0];
+    // somewhere passable 60 km out
+    for (let k = 0; k < 16; k++) {
+      const a = (k / 16) * Math.PI * 2;
+      const x = home.x + Math.cos(a) * 60;
+      const z = home.z + Math.sin(a) * 60;
+      if (!c.world.isPassable(x, z) || !c.world.findArmyPath({ x, z }, { x: home.x, z: home.z })) continue;
+      p.x = x;
+      p.z = z;
+      break;
+    }
+    p.path = [];
+    p.order = { type: 'idle' };
+    for (const u of p.units) u.fuel = 4; // a few dozen km left: not enough for 60 km plus a margin
+    c.state.ai[c.enemy].nextThinkAt = 0;
+    stepStrategicAI(c, 0);
+    expect(p.order.type).toBe('return');
+  });
+
   it('difficulty changes the rival’s starting force', () => {
     const count = (d: 'easy' | 'hard'): { units: number; tanks: number } => {
       const { state } = createCampaign(321, d);

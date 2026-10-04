@@ -2,7 +2,7 @@ import { dist, type Vec2 } from '../core/math';
 import { RESOURCES, STOCK_RESOURCES, stockTotal, type PartialStock, type StockResourceId } from '../data/resources';
 import { depositToBase } from '../economy/economy';
 import { log, newId, type SimContext } from './context';
-import { areHostile } from './queries';
+import { areHostile, nearestBaseOf } from './queries';
 import type { Base, Convoy } from './types';
 
 export const CONVOY_SPEED = 12; // map units per hour
@@ -46,10 +46,21 @@ export function stepConvoys(ctx: SimContext, dt: number): void {
 
   // movement / delivery / interception
   for (const c of Object.values(state.convoys)) {
-    const base = state.bases[c.toBaseId];
+    let base = state.bases[c.toBaseId];
     if (!base || base.factionId !== c.factionId) {
-      delete state.convoys[c.id];
-      continue;
+      // the destination fell: head for the nearest base we still hold
+      const refuge = nearestBaseOf(state, c.factionId, c.x, c.z);
+      const path = refuge ? ctx.world.findArmyPath({ x: c.x, z: c.z }, { x: refuge.x, z: refuge.z }) : null;
+      const player = state.factions[c.factionId]?.isPlayer;
+      if (!refuge || !path) {
+        delete state.convoys[c.id];
+        if (player && (c.people > 0 || stockTotal(c.cargo) >= 1)) log(state, `A convoy lost its destination and had nowhere to go.${c.people ? ` ${c.people} colonists are missing.` : ''}`, 'warn', c.factionId);
+        continue;
+      }
+      c.toBaseId = refuge.id;
+      c.path = path;
+      base = refuge;
+      if (player && c.fromBuildingId.startsWith('manual:')) log(state, `Its destination has fallen: a convoy is turning back to ${refuge.name}.`, 'warn', c.factionId);
     }
     let move = CONVOY_SPEED * ctx.world.speedFactorAt(c.x, c.z) * dt;
     while (move > 0 && c.path.length > 0) {

@@ -752,13 +752,19 @@ export class BattleSim {
         u.path = [];
         return;
       }
-      if (dist(u.x, u.z, b.x, b.z) <= b.radius + 7) {
+      const d = dist(u.x, u.z, b.x, b.z);
+      // at the door — or at the nearest free spot outside it when the ground there is blocked
+      if (d <= b.radius + 7 || (u.path.length === 0 && d <= b.radius + 24)) {
         this.enterBuilding(u, b);
         return;
       }
       if (u.path.length === 0) {
         const edge = this.buildingEdge(b, u.x, u.z);
         this.planPath(u, edge.x, edge.z);
+        if (u.path.length === 0) {
+          // no way to the building
+          u.order = { type: 'idle' };
+        }
       }
       return;
     }
@@ -773,6 +779,14 @@ export class BattleSim {
       const d = dist(u.x, u.z, p.x, p.z);
       const range = this.engageRange(u, o.target);
       const visible = o.target.kind === 'building' || this.unitById(o.target.id)!.seenBy[u.side];
+      if (u.inside !== null) {
+        // fire from the building while the target is in reach; otherwise come out after it
+        if (d <= range && visible) {
+          u.path = [];
+          return;
+        }
+        this.leaveBuilding(u, p.x, p.z);
+      }
       if (d > range * 0.92 || !visible) {
         // close in
         const last = u.path[u.path.length - 1];
