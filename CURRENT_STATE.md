@@ -6,6 +6,9 @@
 
 - **Full gameplay loop**: main menu (live 3D map preview) → intro → strategic map → contact report →
   tactical battle *or* auto-resolve → after-action report → results persisted → campaign continues.
+- **Navigation**: expedition overview (all bases with shortage warnings and all task forces with orders,
+  composition and fuel range; tap to jump), next-base / next-task-force buttons, event log; 9-step
+  directive tutorial (economy → military → fortify → expand).
 - **Strategic map**: seeded continent (plains, forests, hills, mountains, coasts, lakes), two expeditions,
   resource sites, roads, bases with real building models, army tokens with banners, convoy trucks,
   perimeter rings, NATO-style symbols and labels, strategic fog of war, pan/zoom/rotate (touch + mouse + keys).

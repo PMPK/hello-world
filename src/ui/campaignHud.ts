@@ -144,12 +144,12 @@ export class CampaignHud {
     this.placementBar = el('div', 'panel placement-bar');
     this.placementBar.style.display = 'none';
     const fab = el('div', 'fab-col');
+    const overview = iconBtn(ICONS.all, 'Expedition overview', () => this.openOverview());
+    overview.dataset.testid = 'overview';
     fab.append(
-      iconBtn(ICONS.base, 'Focus base', () => {
-        const b = basesOf(this.c.state, this.c.state.playerFactionId)[0];
-        if (b) this.c.select({ kind: 'base', id: b.id }, true);
-      }),
+      iconBtn(ICONS.base, 'Next base', () => this.cycleBase()),
       iconBtn(ICONS.army, 'Next task force', () => this.cycleArmy()),
+      overview,
       iconBtn(ICONS.log, 'Event log', () => this.openLog()),
     );
     this.directive = el('div', 'panel directive');
@@ -277,6 +277,77 @@ export class CampaignHud {
     });
   }
 
+  private cycleBase(): void {
+    const s = this.c.state;
+    const mine = basesOf(s, s.playerFactionId).sort((a, b) => a.founded - b.founded || (a.id < b.id ? -1 : 1));
+    if (!mine.length) return;
+    const sel = this.c.selection;
+    const i = sel?.kind === 'base' ? mine.findIndex((b) => b.id === sel.id) : -1;
+    this.c.select({ kind: 'base', id: mine[(i + 1) % mine.length].id }, true);
+  }
+
+  /** Everything the player commands at a glance; tap a row to jump there. */
+  openOverview(): void {
+    const s = this.c.state;
+    const pf = s.playerFactionId;
+    let close: () => void = () => undefined;
+    const go = (sel: Selection): void => {
+      close();
+      this.c.select(sel, true);
+    };
+    const bases = el('div', 'list');
+    for (const b of basesOf(s, pf).sort((x, y) => x.founded - y.founded)) {
+      const e = b.econ;
+      const warn: string[] = [];
+      if (e.foodPerHour < 0 && b.stock.food < 40) warn.push('food');
+      if (e.energyProduced + 0.01 < e.energyDemand) warn.push('power');
+      if (e.workersEmployed < e.workersNeeded) warn.push('workers');
+      if (b.stock.ammo < 15) warn.push('ammo');
+      const hqBuilding = Object.values(s.buildings).some((x) => x.baseId === b.id && x.typeId === 'hq' && x.state === 'construction');
+      const row = el(
+        'div',
+        'item tap',
+        el('span', { class: 'badge', text: 'BASE' }),
+        el('span', { class: 'name', text: b.name }),
+        el('span', {
+          class: `meta ${warn.length ? 'warn' : ''}`,
+          text: `${Math.floor(b.population)} ppl · ${b.garrison.length} units${hqBuilding ? ' · HQ assembling' : ''}${warn.length ? ` · low ${warn.join(', ')}` : ''}`,
+        }),
+      );
+      row.dataset.testid = 'overview-base';
+      row.addEventListener('click', () => go({ kind: 'base', id: b.id }));
+      bases.append(row);
+    }
+    const armies = el('div', 'list');
+    const mine = Object.values(s.armies).filter((a) => a.factionId === pf);
+    if (!mine.length) armies.append(el('div', { class: 'muted', text: 'No task forces in the field.' }));
+    for (const a of mine) {
+      const range = fuelRange(a.units);
+      const o = a.order;
+      const doing = o.type === 'idle' ? 'holding' : o.type === 'move' ? 'moving' : o.type === 'return' ? 'returning' : o.type === 'attack_base' ? 'assaulting a base' : o.type === 'attack_army' ? 'pursuing' : 'attacking an outpost';
+      const row = el(
+        'div',
+        'item tap',
+        el('span', { class: 'badge', text: `${a.units.length}` }),
+        el('span', { class: 'name', text: a.name }),
+        el('span', {
+          class: `meta ${range < 40 ? 'warn' : ''}`,
+          text: `${doing} · ${composition(a.units)}${Number.isFinite(range) ? ` · ${Math.floor(range)} km fuel` : ''}`,
+        }),
+      );
+      row.dataset.testid = 'overview-army';
+      row.addEventListener('click', () => go({ kind: 'army', id: a.id }));
+      armies.append(row);
+    }
+    close = openModal(this.host, {
+      kicker: 'Expedition overview',
+      title: s.factions[pf]?.name ?? 'Expedition',
+      body: [el('div', { class: 'label', text: 'Bases' }), bases, el('div', { class: 'label', text: 'Task forces' }), armies],
+      actions: [{ label: 'Close', onClick: () => undefined }],
+      dismissable: true,
+    });
+  }
+
   private cycleArmy(): void {
     const s = this.c.state;
     const mine = Object.values(s.armies)
@@ -312,6 +383,8 @@ export class CampaignHud {
       [has('factory'), 'Build an Industrial Factory for components and ammunition.'],
       [has('vehicle_depot'), 'Build a Vehicle Depot to produce jeeps and tanks.'],
       [units.filter((u) => u.designId === 'mbt').length >= 2, 'Produce a second Main Battle Tank at the Vehicle Depot.'],
+      [has('bunker') || has('at_emplacement'), 'Fortify: build an MG Bunker or AT Gun on the side facing the rival.'],
+      [basesOf(s, pf).length >= 2, 'Expand: found a second base near unclaimed resources (base panel → Found new base).'],
     ];
     const next = steps.find(([done]) => !done);
     const done = steps.filter(([d]) => d).length;

@@ -202,7 +202,7 @@ test('base assault battle contains the base buildings', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
-test('split a task force and merge it back from the army panel', async ({ page }) => {
+test('overview navigation, then split a task force and merge it back', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto('/');
@@ -213,11 +213,10 @@ test('split a task force and merge it back from the army panel', async ({ page }
   const count = (): Promise<number> =>
     px(page, (p) => Object.values(p.state().armies as Record<string, any>).filter((a: any) => a.factionId === p.state().playerFactionId).length);
   expect(await count()).toBe(1);
-  await px(page, (p) => {
-    const s = p.state();
-    const a = Object.values(s.armies as Record<string, any>).find((x: any) => x.factionId === s.playerFactionId);
-    p.app.campaign.select({ kind: 'army', id: a.id });
-  });
+  // the expedition overview lists the task force; tapping it selects it
+  await page.getByTestId('overview').click();
+  await page.getByTestId('overview-army').first().click();
+  expect(await px(page, (p) => p.app.campaign.selection?.kind)).toBe('army');
   await page.getByTestId('army-split').click();
   const rows = page.getByTestId('split-unit');
   await rows.nth(0).click();
