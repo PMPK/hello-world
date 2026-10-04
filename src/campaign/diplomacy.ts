@@ -1,3 +1,4 @@
+import { difficultyOf } from '../data/difficulty';
 import { dist } from '../core/math';
 import { FACTION_DEFS } from '../data/factions';
 import { HOSTILITY_MESSAGES } from '../data/lore';
@@ -41,7 +42,7 @@ export function stepDiplomacy(ctx: SimContext, dt: number): void {
   const { state } = ctx;
   for (const r of state.relations) {
     if (r.status === 'hostile') continue;
-    r.tension += TENSION_DRIFT_PER_HOUR * dt;
+    r.tension += TENSION_DRIFT_PER_HOUR * difficultyOf(state.difficulty).tension * dt;
     // Armies loitering near the other side's bases raise tension.
     for (const [x, y] of [
       [r.a, r.b],

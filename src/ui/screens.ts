@@ -1,4 +1,5 @@
 import { GAME_INFO } from '../config/gameInfo';
+import { DIFFICULTIES, DIFFICULTY_ORDER, type Difficulty } from '../data/difficulty';
 import { INTRO_LINES, INTRO_SIGNOFF } from '../data/lore';
 import type { Quality, Settings } from '../app/settings';
 import type { SaveInfo } from '../persistence/save';
@@ -62,6 +63,8 @@ export function confirmModal(root: HTMLElement, title: string, text: string, okL
 export interface MainMenuActions {
   onContinue: (() => void) | null;
   onNew: () => void;
+  difficulty: Difficulty;
+  onDifficulty: (d: Difficulty) => void;
   onLoad: () => void;
   onSettings: () => void;
   onReset: (() => void) | null;
@@ -82,13 +85,30 @@ export function mainMenu(root: HTMLElement, latest: SaveInfo | null, a: MainMenu
   const nb = btn('New Campaign', a.onNew, latest ? '' : 'primary');
   nb.dataset.testid = 'new-campaign';
   inner.append(nb);
+  // difficulty for the next new campaign
+  const dseg = el('div', 'seg menu-diff');
+  const dhint = el('div', { class: 'menu-diff-hint', text: DIFFICULTIES[a.difficulty].description });
+  const dbtns = DIFFICULTY_ORDER.map((d) => {
+    const b = btn(DIFFICULTIES[d].name, () => {
+      dbtns.forEach((x, i) => x.classList.toggle('active', DIFFICULTY_ORDER[i] === d));
+      dhint.textContent = DIFFICULTIES[d].description;
+      a.onDifficulty(d);
+    }, `small ${d === a.difficulty ? 'active' : ''}`);
+    b.dataset.testid = `difficulty-${d}`;
+    return b;
+  });
+  dseg.append(...dbtns);
+  inner.append(el('div', { class: 'menu-diff-row' }, el('span', { class: 'menu-diff-label', text: 'Rival' }), dseg), dhint);
   const lb = btn(latest ? 'Load Game' : 'Import Save', a.onLoad);
   lb.dataset.testid = 'load-game';
   inner.append(lb);
-  inner.append(btn('Settings', a.onSettings));
-  if (a.onFullscreen) inner.append(btn('Fullscreen', a.onFullscreen));
-  if (a.onInstall) inner.append(btn('Install App', a.onInstall));
-  if (a.onReset && latest) inner.append(btn('Reset Campaign', a.onReset, 'danger'));
+  // secondary actions share one compact row so the menu fits a landscape phone
+  const row = el('div', 'menu-row');
+  row.append(btn('Settings', a.onSettings));
+  if (a.onFullscreen) row.append(btn('Fullscreen', a.onFullscreen));
+  if (a.onInstall) row.append(btn('Install', a.onInstall));
+  if (a.onReset && latest) row.append(btn('Reset', a.onReset, 'danger'));
+  inner.append(row);
   const meta = el('div', 'menu-meta');
   meta.innerHTML = latest
     ? `LAST SAVE · ${latest.summary.date} · ${latest.slot.toUpperCase()}<br/>${latest.summary.bases} base(s) · ${latest.summary.armies} task force(s)`

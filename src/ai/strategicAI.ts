@@ -23,9 +23,11 @@ import {
   enemyFactionOf,
   garrisonStrength,
   isOutpost,
+  isVisibleToFaction,
   relationOf,
   strengthOf,
 } from '../campaign/queries';
+import { difficultyOf } from '../data/difficulty';
 import type { AIState, Army, Base, CampaignState } from '../campaign/types';
 
 const THINK_INTERVAL = 1.5;
@@ -322,6 +324,8 @@ function enemyTargets(state: CampaignState, factionId: string): TargetOption[] {
   }
   for (const a of Object.values(state.armies)) {
     if (a.factionId === factionId || !areHostile(state, factionId, a.factionId)) continue;
+    // strategic fog of war: only forces the AI currently has eyes on
+    if (!isVisibleToFaction(state, factionId, a.x, a.z)) continue;
     out.push({ target: { kind: 'army', id: a.id }, x: a.x, z: a.z, defense: armyStrength(a), value: 4 });
   }
   return out;
@@ -372,7 +376,8 @@ function thinkMilitary(ctx: SimContext, ai: AIState): void {
   const { state } = ctx;
   const fid = ai.factionId;
   const def = FACTION_DEFS[state.factions[fid]?.defId ?? ''];
-  const caution = def?.ai.caution ?? 0.5;
+  const level = difficultyOf(state.difficulty);
+  const caution = Math.max(0, (def?.ai.caution ?? 0.5) + level.aiCaution);
   const enemy = enemyFactionOf(state, fid);
   const hostile = enemy ? areHostile(state, fid, enemy) : false;
   const armies = armiesOf(state, fid);
@@ -404,7 +409,7 @@ function thinkMilitary(ctx: SimContext, ai: AIState): void {
   for (const base of bases) {
     let threat = 0;
     for (const a of Object.values(state.armies)) {
-      if (a.factionId === fid) continue;
+      if (a.factionId === fid || !isVisibleToFaction(state, fid, a.x, a.z)) continue;
       const d = dist(a.x, a.z, base.x, base.z);
       if (d < 26 || (a.order.type === 'attack_base' && a.order.targetId === base.id)) threat += armyStrength(a);
     }
@@ -416,7 +421,7 @@ function thinkMilitary(ctx: SimContext, ai: AIState): void {
   }
 
   // --- offence ---
-  if (state.time - ai.lastAttackLaunch < OFFENSIVE_COOLDOWN) return;
+  if (state.time - ai.lastAttackLaunch < OFFENSIVE_COOLDOWN * level.offensiveCooldown) return;
   if (armies.some((a) => (a.aiRole === 'attack' || a.aiRole === 'raid') && a.order.type !== 'return')) return;
   const home = bases.slice().sort((a, b) => strengthOf(b.garrison) - strengthOf(a.garrison))[0];
   if (!home || home.garrison.length < 3) return;

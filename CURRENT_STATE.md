@@ -38,7 +38,10 @@
   flanking group, focus fire, fallback, wait-when-outmatched, withdrawal; siege defence; reduces enemy
   fortifications with the right arm (tanks vs bunkers, infantry vs AT gun pits).
 - **Strategic AI**: needs-based build order, staffing/manpower-aware recruitment, raids on outposts,
-  base assaults, defence recalls, fuel/readiness checks, refits after defeats.
+  base assaults, defence recalls, fuel/readiness checks, refits after defeats; **strategic fog of war**
+  (it only targets and reacts to player forces it can see).
+- **Difficulty** (main menu, per campaign): Easy / Normal / Hard tune the rival's economy speed,
+  caution, offensive tempo, tension drift and battlefield reaction time/flanking.
 - **Results**: casualties, rescued crews returning to population, damage/ammo/fuel persisted, buildings
   destroyed/damaged, base and outpost capture, loser retreats, stats and log.
 - **Saves**: IndexedDB (fallbacks), versioned envelope + migrations, autosave (timer, app hidden, battles),
@@ -50,10 +53,10 @@
   acknowledgements, radio chirps for reports, contact alarm, wind ambience; Sound Off/Low/Medium/High in
   settings, M to mute.
 - **Auto-resolve** runs in time slices with a progress dialog (no main-thread freeze on phones).
-- **Tests**: 57 Vitest unit tests; Playwright smoke tests on phone-landscape touch and desktop mouse profiles
+- **Tests**: 60 Vitest unit tests; Playwright smoke tests on phone-landscape touch and desktop mouse profiles
   (full loop incl. unit card, save/continue, save-slot listing and import; fortified base assault;
   task force split/merge).
-- **Save schema v2** (Building.repeat) with a v1 → v2 migration.
+- **Save schema v3** (Building.repeat in v2, CampaignState.difficulty in v3) with migrations from v1.
 - **Deployment**: GitHub Actions CI + Pages deploy workflow (gh-pages branch). A single-file build is also
   published as a claude.ai Artifact (https://claude.ai/artifact/7qGUMq5vWjnaNKRHEyempW).
 
@@ -67,7 +70,6 @@
 
 ## Known issues / limitations
 
-- Strategic AI has full knowledge of the map (no fog of war for the AI).
 - Field armies without supply trucks cannot resupply away from a base; trucks themselves only refill at bases.
   The army panel shows fuel range and truck cargo; the map flags LOW FUEL / LOW AMMO.
 - Battle unit separation is simple; large groups can jostle around obstacles. Paths are re-planned when blocked.
@@ -77,7 +79,6 @@
 - The campaign continues after a faction is broken (sandbox) but there is no "recover expedition" flow
   for a player who lost every base and army other than starting a new campaign.
 - Audio is procedural and minimal (no music, no voice lines); browsers start it only after the first tap/key.
-- AI difficulty is not configurable yet.
 - Defences only fight inside the 800 m battlefield around the contact point; positions have no firing arcs
   (they traverse freely) and silenced positions are re-crewed by the economy after the battle.
 - Headless Chromium uses SwiftShader in tests; real-device performance has been budgeted (≈100k triangles on
@@ -96,7 +97,7 @@
 2. Defences: let the player see/attack enemy positions from the campaign map (intel), and garrison
    infantry inside bunkers.
 3. Infantry garrisoning buildings in battle (cover + capture mechanics).
-4. AI scouting and strategic fog of war for the AI; difficulty setting.
+4. AI scouting behaviour (recon patrols) to make use of its fog of war; per-difficulty starting bonuses.
 5. Founding new bases from outposts; transferring population.
 6. Battle simulation in a Web Worker; spatial hash for targeting.
 7. Audio polish: music stems, distant battle rumble on the campaign map, per-faction radio voices.

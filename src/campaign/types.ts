@@ -1,3 +1,4 @@
+import type { Difficulty } from '../data/difficulty';
 import type { Vec2 } from '../core/math';
 import type { BuildingTypeId, SiteKind } from '../data/buildings';
 import type { PartialStock, Stock } from '../data/resources';
@@ -10,7 +11,7 @@ import type { ResearchState } from '../research/research';
  */
 
 /** Bump when the shape of CampaignState changes; add a migration in persistence/migrations.ts. */
-export const STATE_VERSION = 2;
+export const STATE_VERSION = 3;
 
 export interface UnitInstance {
   id: string;
@@ -240,6 +241,8 @@ export interface CampaignStats {
 export interface CampaignState {
   version: number;
   seed: number;
+  /** Rival expedition difficulty (state v3). */
+  difficulty: Difficulty;
   /** Campaign hours since start. */
   time: number;
   rngState: number;

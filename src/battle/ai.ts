@@ -1,5 +1,6 @@
 import { clamp, dist } from '../core/math';
 import { BUILDINGS } from '../data/buildings';
+import { difficultyOf } from '../data/difficulty';
 import type { BattleSim } from './sim';
 import { bBlocked, bForest, bHeight } from './terrain';
 import type { BBuilding, BUnit, SideIndex, TargetRef } from './types';
@@ -14,6 +15,7 @@ interface Memory {
   inForest: boolean;
 }
 
+/** Base decision interval (seconds); scaled by difficulty for the rival's commanders. */
 const THINK_INTERVAL = 1.0;
 
 function isActive(u: BUnit): boolean {
@@ -62,10 +64,16 @@ export class TacticalAI {
   private contactAt = -1;
   private lastContact = -999;
   private readonly siegeAttacker: boolean;
+  private readonly thinkInterval: number;
+  private readonly flanking: boolean;
 
   constructor(sim: BattleSim, side: SideIndex) {
     this.sim = sim;
     this.side = side;
+    // difficulty only tunes the rival's commanders (the player's side in auto-resolve plays at Normal)
+    const level = difficultyOf(sim.setup.sides[side].isPlayer ? 'normal' : sim.setup.difficulty);
+    this.thinkInterval = THINK_INTERVAL * level.tacticalThink;
+    this.flanking = level.flanking;
     this.nextThink = 0.4 + side * 0.5;
     const siege = sim.setup.kind !== 'field';
     // Field battles are meeting engagements: both sides manoeuvre. Siege defenders hold their base.
@@ -79,7 +87,7 @@ export class TacticalAI {
 
   update(_dt: number): void {
     if (this.sim.time < this.nextThink) return;
-    this.nextThink = this.sim.time + THINK_INTERVAL;
+    this.nextThink = this.sim.time + this.thinkInterval;
     this.think();
   }
 
@@ -419,7 +427,7 @@ export class TacticalAI {
     const waiting = outmatched && sim.time - this.holdSince < 45;
 
     // flank group
-    if (!this.flankPoint && own.length >= 6 && !waiting) {
+    if (this.flanking && !this.flankPoint && own.length >= 6 && !waiting) {
       const sideSign = this.pickFlankSide(enemyC!, px, pz);
       this.flankPoint = this.sim.freeSpot(enemyC!.x + px * 170 * sideSign - ux * 30, enemyC!.z + pz * 170 * sideSign - uz * 30);
       this.flankStarted = sim.time;

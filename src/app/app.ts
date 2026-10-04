@@ -18,6 +18,7 @@ import { Keyboard } from '../input/pointer';
 import { el } from '../ui/dom';
 import { confirmModal, introScreen, mainMenu, openModal, rotateOverlay, settingsModal } from '../ui/screens';
 import { AudioEngine } from '../audio/audio';
+import { difficultyOf } from '../data/difficulty';
 import { BattleMode } from './battleMode';
 import { CampaignMode } from './campaignMode';
 import { loadSettings, saveSettings, type Settings } from './settings';
@@ -212,6 +213,11 @@ export class App {
         } else this.newCampaign();
       },
       onLoad: () => void this.openLoadMenu(),
+      difficulty: this.settings.difficulty,
+      onDifficulty: (d) => {
+        this.settings.difficulty = d;
+        saveSettings(this.settings);
+      },
       onSettings: () => settingsModal(this.ui, this.settings, (s) => this.applySettings(s)),
       onReset: latest
         ? () =>
@@ -300,7 +306,7 @@ export class App {
     const loading = el('div', { class: 'modal-back', html: '<div class="boot-sub">GENERATING PLANET…</div>' });
     this.ui.append(loading);
     setTimeout(() => {
-      const { state, world } = createCampaign(randomSeed());
+      const { state, world } = createCampaign(randomSeed(), this.settings.difficulty);
       loading.remove();
       introScreen(this.ui, () => {
         this.settings.introSeen = true;
@@ -337,7 +343,9 @@ export class App {
     openModal(this.ui, {
       kicker: GAME_INFO.title,
       title: 'Command menu',
-      body: [el('div', { class: 'hint', text: 'The campaign is paused. Progress autosaves regularly.' })],
+      body: [
+        el('div', { class: 'hint', text: `The campaign is paused. Progress autosaves regularly. Difficulty: ${difficultyOf(c.state.difficulty).name}.` }),
+      ],
       dismissable: false,
       actions: [
         { label: 'Resume', cls: 'primary', onClick: () => c.setSpeed(prev || 1) },

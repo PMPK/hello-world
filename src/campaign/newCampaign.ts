@@ -5,6 +5,7 @@ import { ENEMY_FACTION_DEF, FACTION_DEFS, PLAYER_FACTION_DEF } from '../data/fac
 import { INTRO_SIGNOFF } from '../data/lore';
 import { emptyStock, stockFrom } from '../data/resources';
 import { emptyResearch } from '../research/research';
+import type { Difficulty } from '../data/difficulty';
 import { BASE_RADIUS, generateLayout } from '../world/mapgen';
 import { generateTerrain } from '../world/terrain';
 import { World } from '../world/world';
@@ -45,10 +46,11 @@ function emptyEcon(): Base['econ'] {
   };
 }
 
-function blankState(seed: number): CampaignState {
+function blankState(seed: number, difficulty: Difficulty): CampaignState {
   return {
     version: STATE_VERSION,
     seed,
+    difficulty,
     time: 0,
     rngState: mixSeed(seed, 'campaign-rng'),
     nextId: 1,
@@ -161,11 +163,11 @@ function setupExpedition(ctx: SimContext, factionId: string, x: number, z: numbe
 }
 
 /** Create a brand-new campaign from a seed. Deterministic for a given seed. */
-export function createCampaign(seed: number): Campaign {
+export function createCampaign(seed: number, difficulty: Difficulty = 'normal'): Campaign {
   const raw = generateTerrain(seed);
   const layout = generateLayout(raw, seed);
   const world = new World(seed, layout.bases, []);
-  const state = blankState(seed);
+  const state = blankState(seed, difficulty);
   const ctx = makeContext(state, world);
 
   const player = addFaction(state, PLAYER_FACTION_DEF, true);

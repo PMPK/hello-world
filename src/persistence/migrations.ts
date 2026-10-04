@@ -15,6 +15,8 @@ export const MIGRATIONS: Record<number, Migration> = {
     for (const [id, b] of Object.entries(buildings)) out[id] = { ...b, repeat: b.repeat ?? null };
     return { ...s, buildings: out, version: 2 };
   },
+  // v3: campaign difficulty (old campaigns were balanced as Normal)
+  2: (s) => ({ ...s, difficulty: s.difficulty ?? 'normal', version: 3 }),
 };
 
 export function migrateState(raw: Record<string, unknown>): CampaignState {

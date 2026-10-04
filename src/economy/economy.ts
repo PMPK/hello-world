@@ -10,6 +10,7 @@ import {
   type Stock,
 } from '../data/resources';
 import { UNIT_DESIGNS } from '../data/unitDesigns';
+import { difficultyOf } from '../data/difficulty';
 import { statsOf } from '../units/stats';
 import { log, newId, type SimContext } from '../campaign/context';
 import { buildingsOfBase } from '../campaign/queries';
@@ -161,6 +162,9 @@ export function stepBaseEconomy(ctx: SimContext, base: Base, dt: number): void {
   const cap = storageCapacity(state, base.id);
   const housing = housingOf(state, base.id);
 
+  // difficulty: the rival expedition works faster or slower than the rules say
+  const incomeMul = state.factions[base.factionId]?.isPlayer ? 1 : difficultyOf(state.difficulty).aiIncome;
+
   // ---- 1. Workforce allocation ----------------------------------------
   let workforce = Math.floor(base.population);
   let workersNeeded = 0;
@@ -255,7 +259,7 @@ export function stepBaseEconomy(ctx: SimContext, base: Base, dt: number): void {
     }
     const s = staffing.get(b.id) ?? 0;
     const powered = def.energyUse > 0 ? powerRatio : 1;
-    const eff = s * hpFactor(b) * powered;
+    const eff = s * hpFactor(b) * powered * incomeMul;
     b.efficiency = eff;
 
     // repairs (any active building)

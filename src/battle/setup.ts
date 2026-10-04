@@ -174,5 +174,6 @@ export function createBattleSetup(state: CampaignState, world: World, p: Pending
     timeLimit: BATTLE_TIME_LIMIT,
     locationName: locationName(state, world, cx, cz),
     startHour: hourOfDay(state.time),
+    difficulty: state.difficulty ?? 'normal',
   };
 }

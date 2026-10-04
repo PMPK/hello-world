@@ -233,6 +233,18 @@ extractors), staffing-aware; fortifies (bunker, then AT gun) on the side facing 
 is high or hostilities begin; recruits within manpower limits; keeps a home guard; launches raids on
 outposts and assaults on bases when its strike force is strong enough (garrison **and** defences
 counted) **and has the fuel to get there**; recalls forces to defend; beaten or dry forces return home to refit.
+The AI plays under the same **strategic fog of war** as the player: it only targets, pursues and reacts
+to forces inside its vision (bases, outposts, armies); bases and outposts are always known.
+
+**Difficulty** (chosen on the main menu, stored per campaign; `src/data/difficulty.ts`):
+
+| | Easy | Normal | Hard |
+|---|---|---|---|
+| Rival economy speed | ×0.8 | ×1 | ×1.25 |
+| Caution when attacking | +0.35 | ±0 | −0.15 |
+| Pause between offensives | ×1.6 | ×1 | ×0.7 |
+| Tension drift | ×0.7 | ×1 | ×1.25 |
+| Battlefield decisions | every 1.6 s, no flanking | 1.0 s | 0.75 s |
 
 ## 7. Persistence
 Versioned save envelope + state schema version with migrations, IndexedDB (localStorage fallback),

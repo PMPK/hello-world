@@ -1,3 +1,5 @@
+import type { Difficulty } from '../data/difficulty';
+
 export type Quality = 'low' | 'medium' | 'high';
 
 export interface Settings {
@@ -10,6 +12,8 @@ export interface Settings {
   /** Master volume 0..1. */
   soundVolume: number;
   muted: boolean;
+  /** Difficulty used for the next new campaign. */
+  difficulty: Difficulty;
 }
 
 const KEY = 'planet-x:settings';
@@ -27,6 +31,7 @@ export function defaultSettings(): Settings {
     edgeScroll: false,
     soundVolume: 0.7,
     muted: false,
+    difficulty: 'normal',
   };
 }
 
@@ -42,6 +47,7 @@ export function loadSettings(): Settings {
       quality: s.quality === 'low' || s.quality === 'medium' || s.quality === 'high' ? s.quality : d.quality,
       soundVolume: typeof s.soundVolume === 'number' && Number.isFinite(s.soundVolume) ? Math.max(0, Math.min(1, s.soundVolume)) : d.soundVolume,
       muted: typeof s.muted === 'boolean' ? s.muted : d.muted,
+      difficulty: s.difficulty === 'easy' || s.difficulty === 'normal' || s.difficulty === 'hard' ? s.difficulty : d.difficulty,
     };
   } catch {
     return d;

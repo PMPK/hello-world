@@ -1,4 +1,5 @@
 import type { BattleKind } from '../campaign/types';
+import type { Difficulty } from '../data/difficulty';
 import type { BuildingTypeId, SiteKind } from '../data/buildings';
 import type { WeaponClass, WeaponDef } from '../data/components';
 import type { UnitStats } from '../units/stats';
@@ -81,6 +82,8 @@ export interface BattleSetup {
   locationName: string;
   /** Local hour of day when the battle starts (lighting and night vision); 12 if absent. */
   startHour?: number;
+  /** Campaign difficulty: tunes the tactical AI of non-player sides ('normal' if absent). */
+  difficulty?: Difficulty;
 }
 
 export type TargetRef = { kind: 'unit'; id: number } | { kind: 'building'; id: number };
