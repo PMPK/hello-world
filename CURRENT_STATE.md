@@ -69,10 +69,12 @@
   acknowledgements, radio chirps for reports, contact alarm, wind ambience; Sound Off/Low/Medium/High in
   settings, M to mute.
 - **Auto-resolve** runs in time slices with a progress dialog (no main-thread freeze on phones).
+- **Crash guard**: a single failing frame is skipped; 30 in a row stop the game with a "The simulation
+  stopped" dialog (error text, Reload / Main menu) instead of a silent freeze. Saves are untouched.
 - **Tests**: 89 Vitest unit tests; Playwright smoke tests on phone-landscape touch and desktop mouse profiles
   (full loop incl. unit card, save/continue, save-slot listing and import; fortified base assault;
   task force split/merge; founding a base and sending it a convoy; research lab project switching;
-  tap-to-garrison in a base battle).
+  tap-to-garrison in a base battle; crash dialog after an injected fault).
 - **Save schema v7** (Building.repeat in v2, CampaignState.difficulty in v3, research shelf in v4, relief
   landing state per faction in v5, convoy colonists in v6, AI patrol clock in v7) with migrations from v1.
 - **Deployment**: GitHub Actions CI + Pages deploy workflow (gh-pages branch). A single-file build is also

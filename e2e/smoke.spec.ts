@@ -330,3 +330,20 @@ test('research lab: pick a project, switch and resume it', async ({ page }) => {
   expect((await research()).current).toEqual({ techId: 'hydroponics', progress: 9 });
   expect(errors).toEqual([]);
 });
+
+test('a persistent runtime error stops the game with a way back to the menu', async ({ page }) => {
+  await page.goto('/');
+  await page.getByTestId('new-campaign').click();
+  await page.getByTestId('intro-skip').click();
+  await expect(page.getByTestId('menu')).toBeVisible();
+  page.on('console', () => undefined); // the injected errors are expected
+  await px(page, (p) => {
+    p.app.campaign.update = () => {
+      throw new Error('injected fault');
+    };
+  });
+  await expect(page.getByText('The simulation stopped')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText('injected fault')).toBeVisible();
+  await page.getByRole('button', { name: 'Main menu' }).click();
+  await expect(page.getByTestId('new-campaign')).toBeVisible();
+});

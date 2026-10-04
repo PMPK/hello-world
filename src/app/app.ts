@@ -70,6 +70,9 @@ class MenuMode implements Mode {
  * Top-level game shell: owns the renderer, the main loop, persistence and
  * transitions between menu, campaign and battle modes.
  */
+/** Consecutive failing frames before the game stops and offers a way out. */
+const CRASH_FRAMES = 30;
+
 export class App {
   readonly canvas: HTMLCanvasElement;
   readonly gr: GameRenderer;
@@ -81,6 +84,7 @@ export class App {
   saves!: SaveManager;
   private mode: Mode | null = null;
   campaign: CampaignMode | null = null;
+  private errorStreak = 0;
   battle: BattleMode | null = null;
   private menuScreen: HTMLElement | null = null;
   private last = performance.now();
@@ -144,8 +148,11 @@ export class App {
     try {
       this.mode?.update(dt);
       this.mode?.render();
+      this.errorStreak = 0;
     } catch (err) {
       console.error(err);
+      // a one-off glitch is skipped; an error every frame means the game cannot go on
+      if (++this.errorStreak >= CRASH_FRAMES) this.crashed(err);
     }
     this.fpsAcc.frames++;
     this.fpsAcc.t += dt;
@@ -155,6 +162,26 @@ export class App {
     }
     requestAnimationFrame(this.frame);
   };
+
+  /** Stop the loop's mode and let the player leave safely (the last autosave is untouched). */
+  private crashed(err: unknown): void {
+    this.errorStreak = 0;
+    this.mode = null;
+    const msg = err instanceof Error ? err.message : String(err);
+    this.ui.querySelectorAll('.modal-back').forEach((m) => m.remove());
+    openModal(this.ui, {
+      kicker: 'System fault',
+      title: 'The simulation stopped',
+      body: [
+        'Something went wrong and the game cannot continue from here. Your last save and autosave are untouched — return to the main menu to continue from them.',
+        el('div', { class: 'hint mono', text: msg.slice(0, 240) }),
+      ],
+      actions: [
+        { label: 'Reload', onClick: () => location.reload() },
+        { label: 'Main menu', cls: 'primary', onClick: () => void this.showMenu() },
+      ],
+    });
+  }
 
   private onResize(): void {
     const w = window.innerWidth;
