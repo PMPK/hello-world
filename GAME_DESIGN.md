@@ -157,6 +157,11 @@ still fights.
   components, fuel or ammo that the founding base has spare (one convoy in flight, can be intercepted).
 - The AI founds one extra base once its first is well established (~day 13–20), sited near unclaimed
   resources and away from the player.
+- **Relief landings** (`src/campaign/relief.ts`): an expedition that has lost every base gets a relief landing
+  from Earth 3 days later (at most twice per campaign): a finished HQ, habitat and agri-dome, 30 colonists,
+  starter supplies and two rifle squads, on free ground at least 90 km from hostile bases and forces, near
+  unclaimed resources and its surviving task forces. Both sides get it. The top bar shows NO BASE with the
+  countdown, and the camera jumps to the new base when it lands.
 
 ### 4.5 Military units (modular)
 

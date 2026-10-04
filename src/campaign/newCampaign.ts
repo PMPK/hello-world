@@ -33,7 +33,7 @@ export interface Campaign {
   world: World;
 }
 
-function emptyEcon(): Base['econ'] {
+export function emptyEcon(): Base['econ'] {
   return {
     energyProduced: 0,
     energyDemand: 0,
@@ -84,12 +84,15 @@ function addFaction(state: CampaignState, defId: string, isPlayer: boolean): Fac
     defeated: false,
     research: emptyResearch(),
     armyCounter: 0,
+    baselessSince: null,
+    reliefLandings: 0,
   };
   state.factions[f.id] = f;
   return f;
 }
 
-function placeStartBuilding(ctx: SimContext, base: Base, typeId: BuildingTypeId, angle: number, r: number): void {
+/** Place a finished structure near (angle, r) from the base centre (start-up and relief landings). */
+export function placeStartBuilding(ctx: SimContext, base: Base, typeId: BuildingTypeId, angle: number, r: number): void {
   const { state, world } = ctx;
   const px = base.x + Math.cos(angle) * r;
   const pz = base.z + Math.sin(angle) * r;

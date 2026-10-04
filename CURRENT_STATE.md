@@ -66,11 +66,11 @@
   acknowledgements, radio chirps for reports, contact alarm, wind ambience; Sound Off/Low/Medium/High in
   settings, M to mute.
 - **Auto-resolve** runs in time slices with a progress dialog (no main-thread freeze on phones).
-- **Tests**: 73 Vitest unit tests; Playwright smoke tests on phone-landscape touch and desktop mouse profiles
+- **Tests**: 76 Vitest unit tests; Playwright smoke tests on phone-landscape touch and desktop mouse profiles
   (full loop incl. unit card, save/continue, save-slot listing and import; fortified base assault;
-  task force split/merge; founding a base).
-- **Save schema v4** (Building.repeat in v2, CampaignState.difficulty in v3, research shelf in v4) with
-  migrations from v1.
+  task force split/merge; founding a base; research lab project switching).
+- **Save schema v5** (Building.repeat in v2, CampaignState.difficulty in v3, research shelf in v4, relief
+  landing state per faction in v5) with migrations from v1.
 - **Deployment**: GitHub Actions CI + Pages deploy workflow (gh-pages branch). A single-file build is also
   published as a claude.ai Artifact (https://claude.ai/artifact/7qGUMq5vWjnaNKRHEyempW).
 
@@ -90,14 +90,17 @@
 - Infantry squads are drawn as up to 6 figures; there are no death animations (squads shrink).
 - Buildings block movement as circles; no garrisoning of infantry inside buildings.
 - Only one pending battle at a time; simultaneous contacts are resolved sequentially.
-- The campaign continues after a faction is broken (sandbox) but there is no "recover expedition" flow
-  for a player who lost every base and army other than starting a new campaign.
+- Recovery is limited to two relief landings per expedition; after that a side that loses every base
+  stays broken (the campaign continues as a sandbox).
 - Audio is procedural and minimal (no music, no voice lines); browsers start it only after the first tap/key.
 - Defences only fight inside the 800 m battlefield around the contact point; positions have no firing arcs
   (they traverse freely) and silenced positions are re-crewed by the economy after the battle.
 - Headless Chromium uses SwiftShader in tests; real-device performance has been budgeted (≈100k triangles on
   medium) but not profiled on a physical phone in this session.
 
+- **Recovery**: an expedition that loses every base gets a relief landing from Earth 3 days later (max
+  twice): finished HQ/habitat/agri-dome, 30 colonists, supplies, two squads, on safe free ground. NO BASE
+  chip with the countdown in the top bar; the camera jumps to the new base.
 - **Expansion**: found new bases (base panel → Found new base…, pick a site on the map): colonists,
   starter supplies and a prefab command post leave the founding base; the terrain is flattened at
   runtime; a road links the bases and **supply convoys** keep the young base stocked. The AI founds a

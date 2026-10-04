@@ -11,7 +11,7 @@ import type { ResearchState } from '../research/research';
  */
 
 /** Bump when the shape of CampaignState changes; add a migration in persistence/migrations.ts. */
-export const STATE_VERSION = 4;
+export const STATE_VERSION = 5;
 
 export interface UnitInstance {
   id: string;
@@ -193,6 +193,10 @@ export interface FactionState {
   research: ResearchState;
   /** Counter for naming armies / bases. */
   armyCounter: number;
+  /** Campaign time the expedition lost its last base (null while it holds one). */
+  baselessSince: number | null;
+  /** Relief landings Earth has already sent to this expedition. */
+  reliefLandings: number;
 }
 
 export interface AIState {

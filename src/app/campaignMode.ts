@@ -30,7 +30,7 @@ import {
 } from '../campaign/construction';
 import { makeContext, syncRng, type SimContext } from '../campaign/context';
 import { cancelOrder, queueUnit } from '../campaign/production';
-import { isOutpost, isVisibleToFaction } from '../campaign/queries';
+import { basesOf, isOutpost, isVisibleToFaction } from '../campaign/queries';
 import { SIM_STEP, stepCampaign } from '../campaign/sim';
 import type { CampaignState } from '../campaign/types';
 import type { World } from '../world/world';
@@ -56,6 +56,8 @@ export class CampaignMode implements Mode, CampaignController {
   placing: { kind: 'building' | 'base'; typeId: BuildingTypeId; baseId: string; x: number; z: number; valid: boolean; reason: string } | null = null;
   private acc = 0;
   private hudTimer = 0;
+  /** Player bases at the last HUD tick (-1 before the first). */
+  private playerBases = -1;
   private autosaveTimer = 0;
   private suspended = false;
 
@@ -180,6 +182,7 @@ export class CampaignMode implements Mode, CampaignController {
     if (this.hudTimer <= 0) {
       this.hudTimer = 0.25;
       this.validateSelection();
+      this.watchReliefLanding();
       this.hud.update();
     }
     this.autosaveTimer += dt;
@@ -193,6 +196,13 @@ export class CampaignMode implements Mode, CampaignController {
   render(): void {
     if (this.suspended) return;
     this.view.render();
+  }
+
+  /** When a relief landing gives a baseless expedition a new base, take the player there. */
+  private watchReliefLanding(): void {
+    const bases = basesOf(this.state, this.state.playerFactionId);
+    if (this.playerBases === 0 && bases.length > 0) this.select({ kind: 'base', id: bases[0].id }, true);
+    this.playerBases = bases.length;
   }
 
   resize(): void {

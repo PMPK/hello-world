@@ -253,3 +253,32 @@ test('found a new base from the base panel', async ({ page }, info) => {
   await page.screenshot({ path: `test-results/found-base-${info.project.name}.png` });
   expect(errors).toEqual([]);
 });
+
+test('research lab: pick a project, switch and resume it', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto('/');
+  await page.getByTestId('new-campaign').click();
+  await page.getByTestId('intro-skip').click();
+  await expect(page.getByTestId('menu')).toBeVisible();
+  await page.getByTestId('speed-0').click();
+  await px(page, (p) => {
+    p.debugFortify(['research_lab']);
+    const s = p.state();
+    const lab = Object.values(s.buildings as Record<string, any>).find((b: any) => b.typeId === 'research_lab');
+    p.app.campaign.select({ kind: 'building', id: lab.id });
+  });
+  const research = (): Promise<any> => px(page, (p) => JSON.parse(JSON.stringify(p.state().factions[p.state().playerFactionId].research)));
+  await page.getByTestId('research-hydroponics').click();
+  expect((await research()).current.techId).toBe('hydroponics');
+  await px(page, (p) => {
+    p.state().factions[p.state().playerFactionId].research.current.progress = 9;
+  });
+  // switching shelves the progress; picking the project again resumes it
+  await page.getByTestId('research-deep_drilling').click();
+  expect((await research()).shelved).toEqual({ hydroponics: 9 });
+  await expect(page.getByTestId('research-hydroponics')).toContainText('9 / 25 RP');
+  await page.getByTestId('research-hydroponics').click();
+  expect((await research()).current).toEqual({ techId: 'hydroponics', progress: 9 });
+  expect(errors).toEqual([]);
+});

@@ -27,6 +27,13 @@ export const MIGRATIONS: Record<number, Migration> = {
     }
     return { ...s, factions: out, version: 4 };
   },
+  // v5: relief landings for expeditions that lost every base
+  4: (s) => {
+    const factions = (s.factions ?? {}) as Record<string, Record<string, unknown>>;
+    const out: Record<string, Record<string, unknown>> = {};
+    for (const [id, f] of Object.entries(factions)) out[id] = { ...f, baselessSince: f.baselessSince ?? null, reliefLandings: f.reliefLandings ?? 0 };
+    return { ...s, factions: out, version: 5 };
+  },
 };
 
 export function migrateState(raw: Record<string, unknown>): CampaignState {

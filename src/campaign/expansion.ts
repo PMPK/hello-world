@@ -46,15 +46,25 @@ export function canFoundFrom(state: CampaignState, from: Base): { ok: true } | {
 
 /** Is (x, z) a valid site for a new base founded from `from`? */
 export function validateBaseSite(state: CampaignState, world: World, from: Base, x: number, z: number): { ok: true } | { ok: false; reason: string } {
+  const problem = siteProblem(state, world, from.factionId, x, z, from);
+  return problem ? { ok: false, reason: problem } : { ok: true };
+}
+
+/**
+ * Why (x, z) cannot take a new base for `factionId`, or null when it can:
+ * inside the map, clear of other bases, resource sites and hostile forces,
+ * on dry and reasonably flat land; within range of `from` when given.
+ */
+export function siteProblem(state: CampaignState, world: World, factionId: string, x: number, z: number, from?: Base): string | null {
   const t = world.terrain;
   const margin = BASE_RADIUS + 4;
-  if (x < margin || z < margin || x > t.size - margin || z > t.size - margin) return { ok: false, reason: 'Too close to the edge of the map' };
-  if (dist(x, z, from.x, from.z) > MAX_FOUND_RANGE) return { ok: false, reason: `Out of range: at most ${MAX_FOUND_RANGE} km from ${from.name}` };
+  if (x < margin || z < margin || x > t.size - margin || z > t.size - margin) return 'Too close to the edge of the map';
+  if (from && dist(x, z, from.x, from.z) > MAX_FOUND_RANGE) return `Out of range: at most ${MAX_FOUND_RANGE} km from ${from.name}`;
   for (const b of Object.values(state.bases)) {
-    if (dist(x, z, b.x, b.z) < MIN_BASE_SPACING) return { ok: false, reason: `Too close to ${b.name}` };
+    if (dist(x, z, b.x, b.z) < MIN_BASE_SPACING) return `Too close to ${b.name}`;
   }
   for (const s of Object.values(state.sites)) {
-    if (dist(x, z, s.x, s.z) < BASE_RADIUS + 1.5) return { ok: false, reason: 'A resource site is in the way' };
+    if (dist(x, z, s.x, s.z) < BASE_RADIUS + 1.5) return 'A resource site is in the way';
   }
   // the perimeter must be dry, reasonably flat land
   let rough = 0;
@@ -67,20 +77,18 @@ export function validateBaseSite(state: CampaignState, world: World, from: Base,
       const pz = z + Math.sin(a) * r;
       n++;
       const b = biomeAt(t, px, pz);
-      if (b === BIOME.water || heightAt(t, px, pz) < 0.35) return { ok: false, reason: 'Too close to water' };
+      if (b === BIOME.water || heightAt(t, px, pz) < 0.35) return 'Too close to water';
       if (b === BIOME.mountains || b === BIOME.snow || slopeAt(t, px, pz) > 1.6) rough++;
     }
   }
-  if (rough / n > 0.2) return { ok: false, reason: 'Terrain too rough' };
+  if (rough / n > 0.2) return 'Terrain too rough';
   for (const a of Object.values(state.armies)) {
-    if (a.factionId !== from.factionId && areHostile(state, a.factionId, from.factionId) && dist(a.x, a.z, x, z) < 20) {
-      return { ok: false, reason: 'Hostile forces nearby' };
-    }
+    if (a.factionId !== factionId && areHostile(state, a.factionId, factionId) && dist(a.x, a.z, x, z) < 20) return 'Hostile forces nearby';
   }
-  return { ok: true };
+  return null;
 }
 
-function nextBaseName(state: CampaignState, factionId: string): string {
+export function nextBaseName(state: CampaignState, factionId: string): string {
   const def = FACTION_DEFS[state.factions[factionId]?.defId ?? ''];
   const used = new Set(Object.values(state.bases).map((b) => b.name));
   for (const n of def?.baseNames ?? []) if (!used.has(n)) return n;

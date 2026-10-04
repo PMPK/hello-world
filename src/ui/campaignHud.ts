@@ -14,6 +14,7 @@ import { FOOD_PER_PERSON_HOUR } from '../economy/economy';
 import { statsOf } from '../units/stats';
 import { defenseStatsOf } from '../units/defense';
 import { availableTechs, TECHS } from '../research/research';
+import { reliefEta } from '../campaign/relief';
 import { bar, btn, clear, el, fmt, ICONS, iconBtn, signed } from './dom';
 import { openModal, Toasts } from './screens';
 
@@ -248,6 +249,16 @@ export class CampaignHud {
         r.title = `${RESOURCES[k].name}: ${fmt(v)} / ${fmt(cap[k])}`;
         this.resStrip.append(r);
       }
+    } else {
+      // every base lost: say whether (and when) Earth's relief landing comes
+      const eta = reliefEta(s, s.playerFactionId);
+      const r = el('div', { class: 'res empty', style: '--c:#e2583f' });
+      r.dataset.testid = 'no-base';
+      r.append(
+        el('div', { class: 'n', text: 'NO BASE' }),
+        el('div', 't', el('span', { text: eta === null ? 'Earth has gone silent' : eta > 0 ? `Relief landing in ${formatDuration(eta)}` : 'Relief landing imminent' })),
+      );
+      this.resStrip.append(r);
     }
     const rel = relationOf(s, s.playerFactionId, Object.keys(s.factions).find((f) => f !== s.playerFactionId) ?? '');
     clear(this.statusChip);

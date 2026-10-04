@@ -7,6 +7,7 @@ import { stepDiplomacy } from './diplomacy';
 import { detectEncounters } from './encounters';
 import { stepEvents } from './events';
 import { armiesOf, basesOf } from './queries';
+import { stepRelief } from './relief';
 
 /** Fixed simulation step in campaign hours (6 minutes). */
 export const SIM_STEP = 0.1;
@@ -23,6 +24,7 @@ export function stepCampaign(ctx: SimContext, dt: number): void {
   stepEvents(ctx, dt);
   detectEncounters(ctx);
   updateDefeat(ctx);
+  stepRelief(ctx);
   syncRng(ctx);
 }
 

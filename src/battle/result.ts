@@ -28,7 +28,7 @@ function findUnit(state: CampaignState, origin: { kind: 'army' | 'garrison'; id:
 }
 
 /** Transfer a base (and its outposts) to the conqueror. */
-function captureBase(ctx: SimContext, base: Base, newOwner: string): void {
+export function captureBase(ctx: SimContext, base: Base, newOwner: string): void {
   const { state } = ctx;
   const prevOwner = base.factionId;
   base.factionId = newOwner;
