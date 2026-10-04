@@ -35,20 +35,26 @@ STRATEGIC MAP ──► economy / construction / production / army movement (rea
 | Campaign time | ⏸ 1× 2× 4× buttons | Space pause · 1/2/4 speed |
 | Battle | ALL · TYPE · BOX · ATK-MOVE · HOLD · STOP · FALL BACK buttons, minimap tap | Ctrl+A all · A attack-move · H hold · S stop · X fall back · C centre · Esc deselect |
 
-## Features (MVP)
+## Features
 
 - Seeded procedural continent: plains, forests, hills, mountains, coasts, lakes, mineral and hydrocarbon sites.
-- Real-time-with-pause campaign; armies move physically along terrain-aware paths; roads speed movement.
+- Real-time-with-pause campaign with day/night; armies move physically along terrain-aware paths; roads speed movement.
 - X4-flavoured economy: workforce, power grid, storage, recipes, convoys hauling ore/crude from outposts.
   Raw: minerals, hydrocarbons, food, energy · Processed: refined alloys, components, fuel, ammunition · People.
-- 9 building types (HQ, Habitat, Power Plant, Extractor, Agri-Dome, Refinery, Industrial Factory, Barracks, Vehicle Depot).
-- Units built from modular components (chassis/engine/armour/weapons/sensors): rifle squads, recon jeeps, main battle tanks.
+- 12 building types: HQ, Habitat, Power Plant, Extractor, Agri-Dome, Refinery, Industrial Factory, Barracks,
+  Vehicle Depot, Research Lab, MG Bunker, AT Gun Emplacement (defences fight on their own in base battles).
+- Units built from modular components (chassis/engine/armour/weapons/sensors): rifle squads, recon jeeps,
+  main battle tanks, supply trucks, ATGM teams (research). Continuous production, task force split/merge.
+- Expansion: found new bases (supply convoys keep them stocked); relief landings when an expedition loses every base.
+- Research: one lab per base, seven tier-1 technologies (economy, logistics, defences, ATGM teams).
 - Tactical battles: line of sight, fog of war, directional armour, cover and concealment, suppression, ammo and fuel,
-  reserves, structures that can be damaged/destroyed, enemy AI that scouts, flanks, keeps tanks at standoff,
-  ambushes with infantry and retreats when beaten. Auto-resolve runs the same simulation headless.
-- Standoff → hostilities diplomacy (tension), strategic AI that builds, recruits, raids and attacks.
-- Versioned saves in IndexedDB (localStorage fallback), autosave, continue, reset.
-- PWA: manifest, service worker, offline cache, fullscreen landscape.
+  reserves, structures that can be damaged/destroyed, field resupply from trucks, unit card and follow camera;
+  enemy AI that scouts, flanks, keeps tanks at standoff, ambushes with infantry, hunts lost contacts and
+  retreats when beaten. Auto-resolve runs the same simulation headless (in time slices, no UI freeze).
+- Standoff → hostilities diplomacy (tension), strategic AI (with fog of war and Easy/Normal/Hard difficulty)
+  that builds, researches, fortifies, expands, recruits, raids and attacks.
+- Versioned saves in IndexedDB (localStorage fallback), autosave, three manual slots, export/import, continue, reset.
+- Procedural WebAudio sound; PWA: manifest, service worker, offline cache, fullscreen landscape.
 
 ## Development
 
@@ -80,7 +86,7 @@ src/
   battle/      tactical battle: setup from campaign, terrain, simulation, tactical AI, results, auto-resolve
   units/       stats derived from modular components
   characters/  Character / Commander / ArmyCommander / PlayerCharacter data model
-  research/    research extension points (empty in the MVP)
+  research/    technologies, research state, multipliers and unlocks
   persistence/ IndexedDB store, versioned save format, migrations
   rendering/   Three.js views (campaign, battle), procedural low-poly models, effects, overlay
   input/       pointer gestures, keyboard, RTS camera rig
@@ -90,7 +96,8 @@ tests/         Vitest unit tests      e2e/  Playwright smoke tests      scripts/
 ```
 
 Read [GAME_DESIGN.md](GAME_DESIGN.md), [ARCHITECTURE.md](ARCHITECTURE.md), [ROADMAP.md](ROADMAP.md) and
-[CURRENT_STATE.md](CURRENT_STATE.md) for details.
+[CURRENT_STATE.md](CURRENT_STATE.md) for details. Coding agents: start with [AGENTS.md](AGENTS.md)
+(Codex and others) or [CLAUDE.md](CLAUDE.md) (Claude Code); [HANDOFF.md](HANDOFF.md) has a kickoff prompt.
 
 ## Deployment
 

@@ -8,6 +8,9 @@ no backend). Read this file first, then:
 3. [ARCHITECTURE.md](ARCHITECTURE.md) — modules, data flow, extension recipes.
 4. [ROADMAP.md](ROADMAP.md) — where the game is going.
 
+[AGENTS.md](AGENTS.md) carries the same rules (plus a code map) for other coding agents such as Codex —
+keep the two files in sync. [HANDOFF.md](HANDOFF.md) has the kickoff prompt for a new agent session.
+
 ## Rules
 
 - **Read the design documents before changing mechanics.** Keep the core loop intact:
