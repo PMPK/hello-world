@@ -71,6 +71,9 @@ export class CampaignView {
   private sun!: THREE.DirectionalLight;
   private daylight!: Daylight;
   private terrainMesh!: THREE.Mesh;
+  private vegetation: THREE.InstancedMesh[] = [];
+  private basesKey = '';
+  private ghostRing: THREE.Mesh | null = null;
   private water!: THREE.Mesh;
   private buildingObjs = new Map<string, { obj: THREE.Object3D; key: string }>();
   private armyObjs = new Map<string, ArmyVisual>();
@@ -98,7 +101,7 @@ export class CampaignView {
 
   constructor(
     private readonly gr: GameRenderer,
-    world: World,
+    private readonly world: World,
     state: CampaignState,
   ) {
     this.terrain = world.terrain;
@@ -124,6 +127,7 @@ export class CampaignView {
     this.buildTerrain();
     this.buildWater();
     this.buildVegetation(world, state);
+    this.basesKey = this.baseKeyOf(state);
 
     this.selRing = new THREE.Mesh(
       buildRing(0.9, 1, 48),
@@ -284,6 +288,7 @@ export class CampaignView {
       im.receiveShadow = false;
       im.computeBoundingSphere();
       this.scene.add(im);
+      this.vegetation.push(im);
     };
     make(Models.coniferLow(), conifers);
     make(Models.broadleafLow(), broad);
@@ -300,6 +305,12 @@ export class CampaignView {
 
   sync(state: CampaignState, dt: number): void {
     this.time += dt;
+    // a newly founded base flattened the terrain: re-mesh the ground and re-plant around it
+    const bk = this.baseKeyOf(state);
+    if (bk !== this.basesKey) {
+      this.basesKey = bk;
+      this.refreshTerrain(state);
+    }
     this.syncRoads(state);
     this.syncBuildings(state);
     this.syncSites(state);
@@ -672,6 +683,41 @@ export class CampaignView {
       this.selRing.position.set(site.x, this.h(site.x, site.z) + 0.12, site.z);
       this.selRing.scale.setScalar(2 * pulse);
     }
+  }
+
+  private baseKeyOf(state: CampaignState): string {
+    return Object.keys(state.bases).sort().join('|');
+  }
+
+  /** Rebuild terrain mesh and vegetation (after runtime terrain edits). */
+  refreshTerrain(state: CampaignState): void {
+    this.scene.remove(this.terrainMesh);
+    this.terrainMesh.geometry.dispose();
+    (this.terrainMesh.material as THREE.Material).dispose();
+    this.buildTerrain();
+    for (const im of this.vegetation) {
+      this.scene.remove(im);
+      im.dispose();
+    }
+    this.vegetation = [];
+    this.buildVegetation(this.world, state);
+  }
+
+  /** Perimeter preview ring for founding a base (null to hide). */
+  setGhostRing(x: number | null, z = 0, radius = 9, valid = true): void {
+    if (x === null) {
+      if (this.ghostRing) this.ghostRing.visible = false;
+      return;
+    }
+    if (!this.ghostRing) {
+      this.ghostRing = new THREE.Mesh(buildRing(0.94, 1, 64), new THREE.MeshBasicMaterial({ color: 0x8cf0a0, transparent: true, opacity: 0.75, depthWrite: false }));
+      this.ghostRing.renderOrder = 11;
+      this.scene.add(this.ghostRing);
+    }
+    this.ghostRing.visible = true;
+    (this.ghostRing.material as THREE.MeshBasicMaterial).color.set(valid ? 0x8cf0a0 : 0xff6a4d);
+    this.ghostRing.scale.set(radius, 1, radius);
+    this.ghostRing.position.set(x, this.h(x, z) + 0.25, z);
   }
 
   /** Placement preview for a building (null to hide). */

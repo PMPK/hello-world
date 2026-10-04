@@ -6,6 +6,7 @@ import { campaignDay, formatCampaignTime, formatDuration, type SpeedSetting } fr
 import { dist } from '../core/math';
 import { ARMY_MAX_UNITS, armyBaseSpeed, armyMen, armySupplies, fuelRange, maxRations, MERGE_RANGE } from '../campaign/armies';
 import { canBuildOutpost, canBuildType, OUTPOST_RANGE } from '../campaign/construction';
+import { canFoundFrom, FOUND_COLONISTS, FOUND_COST, MAX_FOUND_RANGE, MIN_BASE_SPACING } from '../campaign/expansion';
 import { affordability, designsFor, MAX_QUEUE } from '../campaign/production';
 import { basesOf, isOutpost, relationOf } from '../campaign/queries';
 import type { Army, Base, Building, BuildingStatus, CampaignState, LogEntry, PendingBattle, UnitInstance } from '../campaign/types';
@@ -29,7 +30,7 @@ export interface CampaignController {
   sound(kind: 'radio' | 'alert' | 'confirm'): void;
   readonly selection: Selection;
   readonly speed: SpeedSetting;
-  readonly placing: { typeId: BuildingTypeId; valid: boolean; reason: string } | null;
+  readonly placing: { kind: 'building' | 'base'; typeId: BuildingTypeId; valid: boolean; reason: string } | null;
   setSpeed(s: SpeedSetting): void;
   select(sel: Selection, focus?: boolean): void;
   openMenu(): void;
@@ -42,6 +43,7 @@ export interface CampaignController {
   setRepeat(buildingId: string, designId: string | null): void;
   deployGarrison(baseId: string): void;
   beginPlacement(baseId: string, typeId: BuildingTypeId): void;
+  beginBaseFounding(fromBaseId: string): void;
   confirmPlacement(): void;
   cancelPlacement(): void;
   buildOutpost(baseId: string, siteId: string): void;
@@ -369,9 +371,13 @@ export class CampaignHud {
     }
     const info = this.placementBar.querySelector('[data-role="info"]') as HTMLElement;
     info.innerHTML = '';
+    const founding = p.kind === 'base';
     info.append(
-      el('div', { style: { fontWeight: '700' }, text: `Placing ${BUILDINGS[p.typeId].name}` }),
-      el('div', { class: p.valid ? 'muted' : 'bad', text: p.valid ? 'Tap inside the perimeter to move · Confirm to build' : p.reason }),
+      el('div', { style: { fontWeight: '700' }, text: founding ? 'Founding a new base' : `Placing ${BUILDINGS[p.typeId].name}` }),
+      el('div', {
+        class: p.valid ? 'muted' : 'bad',
+        text: p.valid ? (founding ? 'Tap the map to choose the site · Confirm to send the colonists' : 'Tap inside the perimeter to move · Confirm to build') : p.reason,
+      }),
     );
     const okBtn = this.placementBar.querySelector('[data-role="ok"]') as HTMLButtonElement;
     okBtn.disabled = !p.valid;
@@ -746,7 +752,19 @@ export class CampaignHud {
       d.dataset.testid = 'deploy';
       actions.append(d);
     }
+    const can = canFoundFrom(s, b);
+    const fb = btn('Found new base…', () => this.c.beginBaseFounding(b.id), can.ok ? '' : 'disabled');
+    fb.dataset.testid = 'found-base';
+    actions.append(fb);
     body.append(actions);
+    body.append(
+      el('div', {
+        class: can.ok ? 'hint' : 'hint bad',
+        text: can.ok
+          ? `Send ${FOUND_COLONISTS} colonists with a prefab command post (${costLine(FOUND_COST)}) to a site ${MIN_BASE_SPACING}–${MAX_FOUND_RANGE} km away.`
+          : `New base: ${can.reason}.`,
+      }),
+    );
     return panel;
   }
 

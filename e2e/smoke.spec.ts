@@ -229,3 +229,28 @@ test('split a task force and merge it back from the army panel', async ({ page }
   expect(await count()).toBe(1);
   expect(errors).toEqual([]);
 });
+
+test('found a new base from the base panel', async ({ page }, info) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto('/');
+  await page.getByTestId('new-campaign').click();
+  await page.getByTestId('intro-skip').click();
+  await expect(page.getByTestId('menu')).toBeVisible();
+  await page.getByTestId('speed-0').click();
+  await px(page, (p) => {
+    const s = p.state();
+    const b = Object.values(s.bases as Record<string, any>).find((x: any) => x.factionId === s.playerFactionId);
+    Object.assign(b.stock, { minerals: 600, refined: 400, components: 200, food: 300, fuel: 200, ammo: 120 });
+    b.population = 60;
+    p.app.campaign.select({ kind: 'base', id: b.id });
+  });
+  await page.getByTestId('found-base').click();
+  await expect(page.getByTestId('confirm-placement')).toBeEnabled();
+  await page.getByTestId('confirm-placement').click();
+  const n = await px(page, (p) => Object.values(p.state().bases as Record<string, any>).filter((b: any) => b.factionId === p.state().playerFactionId).length);
+  expect(n).toBe(2);
+  await page.waitForTimeout(800);
+  await page.screenshot({ path: `test-results/found-base-${info.project.name}.png` });
+  expect(errors).toEqual([]);
+});

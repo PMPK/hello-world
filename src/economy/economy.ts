@@ -50,25 +50,36 @@ export function hpFactor(b: Building): number {
   return f >= 0.5 ? 1 : Math.max(0.25, f / 0.5);
 }
 
+/** Field-camp storage (tarps, containers) while a base has no working HQ. */
+export const CAMP_STORAGE = 90;
+
 export function storageCapacity(state: CampaignState, baseId: string): Stock {
   const cap = emptyStock();
   for (const k of STOCK_RESOURCES) cap[k] = MIN_STORAGE;
+  let hq = false;
   for (const b of buildingsOfBase(state, baseId)) {
     if (b.state !== 'active') continue;
+    if (b.typeId === 'hq') hq = true;
     const st = BUILDINGS[b.typeId].storage;
     if (!st) continue;
     for (const k of STOCK_RESOURCES) cap[k] += st[k] ?? 0;
   }
+  if (!hq) for (const k of STOCK_RESOURCES) cap[k] += CAMP_STORAGE;
   return cap;
 }
 
+/** Tents and prefab shelters while a base has no working HQ (new or ruined). */
+export const CAMP_HOUSING = 24;
+
 export function housingOf(state: CampaignState, baseId: string): number {
   let h = 0;
+  let hq = false;
   for (const b of buildingsOfBase(state, baseId)) {
     if (b.state !== 'active') continue;
     h += BUILDINGS[b.typeId].housing ?? 0;
+    if (b.typeId === 'hq') hq = true;
   }
-  return h;
+  return hq ? h : h + CAMP_HOUSING;
 }
 
 /** Add to base stock respecting capacity; returns the amount that did not fit. */

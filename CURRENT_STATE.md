@@ -53,9 +53,9 @@
   acknowledgements, radio chirps for reports, contact alarm, wind ambience; Sound Off/Low/Medium/High in
   settings, M to mute.
 - **Auto-resolve** runs in time slices with a progress dialog (no main-thread freeze on phones).
-- **Tests**: 60 Vitest unit tests; Playwright smoke tests on phone-landscape touch and desktop mouse profiles
+- **Tests**: 65 Vitest unit tests; Playwright smoke tests on phone-landscape touch and desktop mouse profiles
   (full loop incl. unit card, save/continue, save-slot listing and import; fortified base assault;
-  task force split/merge).
+  task force split/merge; founding a base).
 - **Save schema v3** (Building.repeat in v2, CampaignState.difficulty in v3) with migrations from v1.
 - **Deployment**: GitHub Actions CI + Pages deploy workflow (gh-pages branch). A single-file build is also
   published as a claude.ai Artifact (https://claude.ai/artifact/7qGUMq5vWjnaNKRHEyempW).
@@ -84,12 +84,16 @@
 - Headless Chromium uses SwiftShader in tests; real-device performance has been budgeted (≈100k triangles on
   medium) but not profiled on a physical phone in this session.
 
+- **Expansion**: found new bases (base panel → Found new base…, pick a site on the map): colonists,
+  starter supplies and a prefab command post leave the founding base; the terrain is flattened at
+  runtime; a road links the bases and **supply convoys** keep the young base stocked. The AI founds a
+  second base once established. Field-camp housing/storage until the HQ is assembled.
+
 ## Unfinished systems (extension points only)
 
 - Research/technology (`src/research/research.ts` registry is empty).
 - Unit designer (component model ready, no UI).
 - Player character direct control (data model in `src/characters/`).
-- Multiple bases per faction (data model supports it; no "found a base" action yet).
 
 ## Best next tasks
 
@@ -98,7 +102,7 @@
    infantry inside bunkers.
 3. Infantry garrisoning buildings in battle (cover + capture mechanics).
 4. AI scouting behaviour (recon patrols) to make use of its fog of war; per-difficulty starting bonuses.
-5. Founding new bases from outposts; transferring population.
+5. Manual supply/population transfers between bases; base specialisation.
 6. Battle simulation in a Web Worker; spatial hash for targeting.
 7. Audio polish: music stems, distant battle rumble on the campaign map, per-faction radio voices.
 8. Tutorial scenario using the directive system in `CampaignHud.updateDirective`.

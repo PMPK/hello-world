@@ -13,6 +13,7 @@ import {
   suggestPlacement,
 } from '../campaign/construction';
 import type { SimContext } from '../campaign/context';
+import { canFoundFrom, foundBase, FOUND_COST, MIN_BASE_SPACING, validateBaseSite } from '../campaign/expansion';
 import { queueUnit } from '../campaign/production';
 import {
   areHostile,
@@ -46,6 +47,7 @@ export function stepStrategicAI(ctx: SimContext, _dt: number): void {
       thinkEconomy(ctx, ai, base);
       thinkRecruitment(ctx, ai, base);
     }
+    thinkExpansion(ctx, ai);
     thinkMilitary(ctx, ai);
   }
 }
@@ -194,6 +196,8 @@ function thinkEconomy(ctx: SimContext, ai: AIState, base: Base): void {
 
   type Step = { type: BuildingTypeId | 'mine' | 'well'; when: boolean; blocking?: boolean };
   const plan: Step[] = [
+    // a young base first secures an income of ore
+    { type: 'mine', when: mineralSites < 1 && count(state, base, 'refinery') < 1, blocking: true },
     { type: 'habitat', when: base.population >= housing - 3, blocking: true },
     { type: 'farm', when: foodNet < 0.2, blocking: true },
     { type: 'refinery', when: count(state, base, 'refinery') < 1, blocking: true },
@@ -229,6 +233,48 @@ function thinkEconomy(ctx: SimContext, ai: AIState, base: Base): void {
     if (r === 'ok') return;
     if (r === 'unaffordable' && step.blocking) return; // save up for it
   }
+}
+
+// ---------------------------------------------------------------------------
+// Expansion
+// ---------------------------------------------------------------------------
+
+/** AI expeditions found one more base once their first one is well established. */
+const AI_MAX_BASES = 2;
+
+function thinkExpansion(ctx: SimContext, ai: AIState): void {
+  const { state, world } = ctx;
+  if (state.time < 24 * 10) return;
+  const bases = basesOf(state, ai.factionId);
+  if (!bases.length || bases.length >= AI_MAX_BASES) return;
+  const from = bases.slice().sort((a, b) => b.population - a.population)[0];
+  if (!canFoundFrom(state, from).ok) return;
+  // keep a healthy reserve at home
+  if (from.population < 50 || from.stock.minerals < (FOUND_COST.minerals ?? 0) + 120 || from.stock.refined < (FOUND_COST.refined ?? 0) + 80) return;
+  const enemy = enemyFactionOf(state, ai.factionId);
+  const enemyBases = enemy ? basesOf(state, enemy) : [];
+  let best: { x: number; z: number } | null = null;
+  let bestScore = -Infinity;
+  for (let r = MIN_BASE_SPACING + 5; r <= 110; r += 15) {
+    for (let k = 0; k < 16; k++) {
+      const a = (k / 16) * Math.PI * 2 + r * 0.05;
+      const x = from.x + Math.cos(a) * r;
+      const z = from.z + Math.sin(a) * r;
+      if (!validateBaseSite(state, world, from, x, z).ok) continue;
+      let score = 0;
+      for (const site of Object.values(state.sites)) {
+        if (site.buildingId && state.buildings[site.buildingId]?.state !== 'destroyed') continue;
+        if (dist(site.x, site.z, x, z) <= OUTPOST_RANGE) score += 10 * site.richness;
+      }
+      for (const eb of enemyBases) score += Math.min(120, dist(eb.x, eb.z, x, z)) * 0.08;
+      score -= r * 0.05;
+      if (score > bestScore) {
+        bestScore = score;
+        best = { x, z };
+      }
+    }
+  }
+  if (best && bestScore > 8) foundBase(ctx, from.id, best.x, best.z);
 }
 
 // ---------------------------------------------------------------------------

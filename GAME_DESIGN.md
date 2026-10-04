@@ -146,6 +146,17 @@ guns and is hard to hit but cannot engage infantry, and its exposed crew can be 
 Armed positions count towards base strength for AI planning, and a base is not taken while any of them
 still fights.
 
+### 4.4b Expansion
+- **Found new base** (base panel): costs 160 ORE · 110 ALY · 30 CMP · 60 FOOD · 20 FUEL · 10 AMMO and 16
+  colonists (12 must stay). The site must be 40–150 km away, at least 40 km from any base, dry, not too
+  rough, clear of resource sites and hostile forces. Max 4 bases per expedition.
+- The new base starts with part of that as supplies, a prefab HQ at 45% (assembled by its colonists),
+  field-camp housing (24) and storage (+90 each) until the HQ works, and a road to the founding base.
+- **Supply convoys** run along that road whenever the young base runs short of ore, alloys, food,
+  components, fuel or ammo that the founding base has spare (one convoy in flight, can be intercepted).
+- The AI founds one extra base once its first is well established (~day 13–20), sited near unclaimed
+  resources and away from the player.
+
 ### 4.5 Military units (modular)
 
 Units are **designs** assembled from components (`src/data/components.ts`, `src/data/unitDesigns.ts`):

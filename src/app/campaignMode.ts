@@ -2,6 +2,8 @@ import { CAMPAIGN_HOURS_PER_SECOND, hourOfDay, type SpeedSetting } from '../core
 import { dist } from '../core/math';
 import { BUILDINGS, type BuildingTypeId } from '../data/buildings';
 import { FACTION_DEFS } from '../data/factions';
+import { canFoundFrom, foundBase, MAX_FOUND_RANGE, MIN_BASE_SPACING, validateBaseSite } from '../campaign/expansion';
+import { BASE_RADIUS } from '../world/mapgen';
 import { statsOf } from '../units/stats';
 import {
   formArmyFromGarrison,
@@ -50,7 +52,7 @@ export class CampaignMode implements Mode, CampaignController {
   private keys: () => void;
   speed: SpeedSetting = 1;
   selection: Selection = null;
-  placing: { typeId: BuildingTypeId; baseId: string; x: number; z: number; valid: boolean; reason: string } | null = null;
+  placing: { kind: 'building' | 'base'; typeId: BuildingTypeId; baseId: string; x: number; z: number; valid: boolean; reason: string } | null = null;
   private acc = 0;
   private hudTimer = 0;
   private autosaveTimer = 0;
@@ -505,8 +507,40 @@ export class CampaignMode implements Mode, CampaignController {
       this.hud.toast('No free space inside the perimeter.', 'warn');
       return;
     }
-    this.placing = { typeId, baseId, x: spot.x, z: spot.z, valid: true, reason: '' };
+    this.placing = { kind: 'building', typeId, baseId, x: spot.x, z: spot.z, valid: true, reason: '' };
     this.view.rig.focus(base.x, base.z + 3, 40);
+    this.updateGhost();
+    this.hud.update(true);
+  }
+
+  /** Choose a site for a new base founded from `fromBaseId` (map placement mode). */
+  beginBaseFounding(fromBaseId: string): void {
+    const from = this.state.bases[fromBaseId];
+    if (!from) return;
+    const can = canFoundFrom(this.state, from);
+    if (!can.ok) {
+      this.hud.toast(can.reason, 'warn');
+      return;
+    }
+    // suggest the nearest valid site, searching outwards
+    let spot: { x: number; z: number } | null = null;
+    for (let r = MIN_BASE_SPACING + 4; r <= MAX_FOUND_RANGE && !spot; r += 10) {
+      for (let k = 0; k < 24; k++) {
+        const a = (k / 24) * Math.PI * 2;
+        const x = from.x + Math.cos(a) * r;
+        const z = from.z + Math.sin(a) * r;
+        if (validateBaseSite(this.state, this.world, from, x, z).ok) {
+          spot = { x, z };
+          break;
+        }
+      }
+    }
+    if (!spot) {
+      this.hud.toast('No suitable site within range.', 'warn');
+      return;
+    }
+    this.placing = { kind: 'base', typeId: 'hq', baseId: fromBaseId, x: spot.x, z: spot.z, valid: true, reason: '' };
+    this.view.rig.focus(spot.x, spot.z, 85);
     this.updateGhost();
     this.hud.update(true);
   }
@@ -515,11 +549,22 @@ export class CampaignMode implements Mode, CampaignController {
     const p = this.placing;
     if (!p) {
       this.view.setGhost(null);
+      this.view.setGhostRing(null);
       return;
     }
     const base = this.state.bases[p.baseId];
     if (!base) {
       this.cancelPlacement();
+      return;
+    }
+    if (p.kind === 'base') {
+      const can = canFoundFrom(this.state, base);
+      const r = can.ok ? validateBaseSite(this.state, this.world, base, p.x, p.z) : can;
+      p.valid = r.ok;
+      p.reason = r.ok ? '' : r.reason;
+      const accent = FACTION_DEFS[this.state.factions[base.factionId]?.defId ?? '']?.structureAccent ?? '#3f86c0';
+      this.view.setGhost('hq', p.x, p.z, p.valid, accent, Math.atan2(base.x - p.x, base.z - p.z));
+      this.view.setGhostRing(p.x, p.z, BASE_RADIUS, p.valid);
       return;
     }
     const r = validatePlacement(this.state, this.world, base, p.typeId, p.x, p.z);
@@ -532,6 +577,19 @@ export class CampaignMode implements Mode, CampaignController {
   confirmPlacement(): void {
     const p = this.placing;
     if (!p) return;
+    if (p.kind === 'base') {
+      const fr = foundBase(this.ctx, p.baseId, p.x, p.z);
+      if (!fr.ok) {
+        this.hud.toast(fr.reason, 'warn');
+        return;
+      }
+      this.placing = null;
+      this.view.setGhost(null);
+      this.view.setGhostRing(null);
+      this.sound('confirm');
+      this.select({ kind: 'base', id: fr.base.id });
+      return;
+    }
     const r = startConstruction(this.ctx, p.baseId, p.typeId, p.x, p.z);
     if (!r.ok) {
       this.hud.toast(r.reason, 'warn');
@@ -546,6 +604,7 @@ export class CampaignMode implements Mode, CampaignController {
   cancelPlacement(): void {
     this.placing = null;
     this.view.setGhost(null);
+    this.view.setGhostRing(null);
     this.hud.update(true);
   }
 

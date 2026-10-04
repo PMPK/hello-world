@@ -1,5 +1,5 @@
 import { dist } from '../core/math';
-import { stockTotal, type PartialStock } from '../data/resources';
+import { STOCK_RESOURCES, stockTotal, type PartialStock, type StockResourceId } from '../data/resources';
 import { depositToBase } from '../economy/economy';
 import { log, newId, type SimContext } from './context';
 import { areHostile } from './queries';
@@ -41,6 +41,8 @@ export function stepConvoys(ctx: SimContext, dt: number): void {
     state.convoys[c.id] = c;
   }
 
+  dispatchSupplyConvoys(ctx);
+
   // movement / delivery / interception
   for (const c of Object.values(state.convoys)) {
     const base = state.bases[c.toBaseId];
@@ -78,4 +80,67 @@ export function stepConvoys(ctx: SimContext, dt: number): void {
       }
     }
   }
+}
+
+/** Resources a sister base ships to a young base, with the stock each side keeps. */
+const SUPPLY_TRANSFER: { k: StockResourceId; keepHome: number; want: number }[] = [
+  { k: 'minerals', keepHome: 140, want: 120 },
+  { k: 'refined', keepHome: 100, want: 80 },
+  { k: 'food', keepHome: 120, want: 100 },
+  { k: 'components', keepHome: 60, want: 40 },
+  { k: 'fuel', keepHome: 80, want: 50 },
+  { k: 'ammo', keepHome: 60, want: 30 },
+];
+const SUPPLY_LOAD = 45;
+
+/**
+ * Bases linked by a road keep each other supplied: when a base runs short of
+ * something its sister base has in surplus, a convoy carries it over (one
+ * convoy in flight per destination; it can be intercepted like any other).
+ */
+function dispatchSupplyConvoys(ctx: SimContext): void {
+  const { state } = ctx;
+  for (const road of Object.values(state.roads)) {
+    const from = state.bases[road.fromBaseId];
+    const hq = state.buildings[road.toBuildingId];
+    if (!from || !hq || hq.typeId !== 'hq') continue;
+    const to = state.bases[hq.baseId];
+    if (!to || to === from || to.factionId !== from.factionId || from.factionId !== road.factionId) continue;
+    const tag = `base:${from.id}`;
+    if (Object.values(state.convoys).some((c) => c.toBaseId === to.id && c.fromBuildingId === tag)) continue;
+    const cargo: PartialStock = {};
+    let load = 0;
+    for (const t of SUPPLY_TRANSFER) {
+      const need = t.want - to.stock[t.k];
+      const spare = from.stock[t.k] - t.keepHome;
+      const amt = Math.min(need, spare, SUPPLY_LOAD - load);
+      if (amt < 5) continue;
+      cargo[t.k] = amt;
+      from.stock[t.k] -= amt;
+      load += amt;
+      if (load >= SUPPLY_LOAD) break;
+    }
+    if (load <= 0) continue;
+    const c: Convoy = {
+      id: newId(state, 'c'),
+      factionId: from.factionId,
+      fromBuildingId: tag,
+      toBaseId: to.id,
+      cargo,
+      path: road.points.slice(1),
+      x: from.x,
+      z: from.z,
+    };
+    state.convoys[c.id] = c;
+  }
+}
+
+/** Total cargo of the supply convoys currently heading to a base. */
+export function incomingSupplies(state: { convoys: Record<string, Convoy> }, baseId: string): number {
+  let n = 0;
+  for (const c of Object.values(state.convoys)) {
+    if (c.toBaseId !== baseId || !c.fromBuildingId.startsWith('base:')) continue;
+    for (const k of STOCK_RESOURCES) n += c.cargo[k] ?? 0;
+  }
+  return n;
 }
