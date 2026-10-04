@@ -41,6 +41,36 @@ export function downloadText(name: string, text: string): boolean {
   }
 }
 
+interface HostDownloads {
+  save(r: { filename: string; data: string }): Promise<{ status: string }>;
+}
+
+/**
+ * Offer a generated file to the player. Inside the claude.ai artifact viewer
+ * plain downloads are blocked, so the host's `downloads` capability is used
+ * when the page is framed there; everywhere else a normal browser download.
+ */
+export async function offerFile(filename: string, text: string): Promise<'saved' | 'declined' | 'blocked'> {
+  const host = (window as unknown as { claude?: { use?: (name: string) => Promise<unknown> } }).claude;
+  if (host && typeof host.use === 'function') {
+    let dl: HostDownloads | null = null;
+    try {
+      dl = (await host.use('downloads')) as HostDownloads | null;
+    } catch {
+      dl = null;
+    }
+    if (dl) {
+      try {
+        await dl.save({ filename, data: text });
+        return 'saved';
+      } catch (e) {
+        return (e as { code?: string } | null)?.code === 'declined' ? 'declined' : 'blocked';
+      }
+    }
+  }
+  return downloadText(filename, text) ? 'saved' : 'blocked';
+}
+
 export interface SaveModalHandlers {
   onSave: (slot: SaveSlot) => void;
   onExport: () => void;

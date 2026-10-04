@@ -11,3 +11,4 @@ e2e/screenshots/
 # generated at build time by scripts/generate-icons.mjs
 public/icons/*.png
 dist-artifact/
+deliverables/

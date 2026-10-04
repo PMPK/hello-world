@@ -10,7 +10,7 @@ import type { World } from '../world/world';
 import type { BattleResult, BattleSetup } from '../battle/types';
 import { openStore } from '../persistence/kvstore';
 import { exportFileName, SaveManager, slotLabel, type SaveInfo, type SaveSlot } from '../persistence/save';
-import { downloadText, loadGameModal, saveGameModal } from '../ui/saves';
+import { loadGameModal, offerFile, saveGameModal } from '../ui/saves';
 import { GameRenderer } from '../rendering/renderer';
 import { Overlay } from '../rendering/overlay';
 import { CampaignView } from '../rendering/campaignView';
@@ -280,8 +280,10 @@ export class App {
     saveGameModal(this.ui, saves, {
       onSave: (slot) => void this.save(slot).then(resume),
       onExport: () => {
-        const ok = downloadText(exportFileName(c.state), this.saves.exportJson(c.state));
-        c.hud.toast(ok ? 'Save file exported.' : 'This browser blocked the download — use Copy to clipboard.', ok ? 'econ' : 'warn');
+        void offerFile(exportFileName(c.state), this.saves.exportJson(c.state)).then((r) => {
+          if (r === 'saved') c.hud.toast('Save file exported.', 'econ');
+          else if (r === 'blocked') c.hud.toast('Downloads are blocked here — use Copy to clipboard.', 'warn');
+        });
       },
       onCopy: () => {
         const json = this.saves.exportJson(c.state);
