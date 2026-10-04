@@ -5,6 +5,7 @@ import { FACTION_DEFS } from '../data/factions';
 import { startResearch } from '../research/research';
 import { canFoundFrom, foundBase, MAX_FOUND_RANGE, MIN_BASE_SPACING, validateBaseSite } from '../campaign/expansion';
 import { sendConvoy, sendSupplyRun } from '../campaign/convoys';
+import { addStandingTransfer, cancelStandingTransfer } from '../campaign/logistics';
 import type { PartialStock } from '../data/resources';
 import { BASE_RADIUS } from '../world/mapgen';
 import { statsOf } from '../units/stats';
@@ -647,6 +648,27 @@ export class CampaignMode implements Mode, CampaignController {
     this.app.audio.ui('confirm');
     this.hud.update(true);
     return null;
+  }
+
+  setAutoSupply(armyId: string, on: boolean): void {
+    const a = this.state.armies[armyId];
+    if (!a || a.factionId !== this.state.playerFactionId) return;
+    a.autoSupply = on;
+    this.hud.toast(on ? `${a.name}: bases will send supplies when it runs low in the field.` : `${a.name}: automatic supply off.`, 'econ');
+    this.hud.update(true);
+  }
+
+  addStandingConvoy(fromId: string, toId: string, cargo: PartialStock, people: number, everyHours: number): string | null {
+    const err = addStandingTransfer(this.ctx, fromId, toId, cargo, people, everyHours);
+    if (err) this.hud.toast(err, 'warn');
+    else this.hud.toast(`Standing convoy to ${this.state.bases[toId]?.name ?? 'the base'} every ${everyHours} h.`, 'econ');
+    this.hud.update(true);
+    return err;
+  }
+
+  cancelStandingConvoy(id: string): void {
+    cancelStandingTransfer(this.ctx, id);
+    this.hud.update(true);
   }
 
   sendSupplyRun(fromId: string, armyId: string, cargo: PartialStock): string | null {

@@ -555,6 +555,7 @@ function debugSighting(app: App): string | null {
     lastBattleTime: -999,
     repathAt: 0,
     aiRole: 'patrol',
+    autoSupply: false,
   };
   s.armies[army.id] = army;
   if (s.ai[ef]) s.ai[ef].nextThinkAt = s.time + 48;

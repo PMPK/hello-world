@@ -11,7 +11,7 @@ import type { ResearchState } from '../research/research';
  */
 
 /** Bump when the shape of CampaignState changes; add a migration in persistence/migrations.ts. */
-export const STATE_VERSION = 9;
+export const STATE_VERSION = 10;
 
 export interface UnitInstance {
   id: string;
@@ -53,6 +53,8 @@ export interface Army {
   repathAt: number;
   /** Strategic AI role tag (null for player armies). */
   aiRole: 'attack' | 'defend' | 'raid' | 'patrol' | null;
+  /** Bases send supply runs on their own when the force runs low in the field (state v10). */
+  autoSupply: boolean;
 }
 
 export type BuildingState = 'construction' | 'active' | 'destroyed';
@@ -167,6 +169,20 @@ export interface Convoy {
   path: Vec2[];
   x: number;
   z: number;
+}
+
+/** A convoy one base sends to another on a schedule (state v10). */
+export interface StandingTransfer {
+  id: string;
+  factionId: string;
+  fromBaseId: string;
+  toBaseId: string;
+  /** Goods per run (what the sending base can spare is sent when it has less). */
+  cargo: PartialStock;
+  people: number;
+  /** Hours between departures. */
+  everyHours: number;
+  nextAt: number;
 }
 
 export interface Road {
@@ -312,6 +328,8 @@ export interface CampaignState {
   sites: Record<string, ResourceSite>;
   armies: Record<string, Army>;
   convoys: Record<string, Convoy>;
+  /** Standing convoy orders between bases (state v10). */
+  transfers: Record<string, StandingTransfer>;
   roads: Record<string, Road>;
   characters: Record<string, Character>;
   relations: Relation[];

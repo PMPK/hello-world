@@ -574,7 +574,8 @@ body {
 }
 
 /* ---------- convoy dialog ---------- */
-.convoy-dest {
+.convoy-dest,
+.convoy-repeat {
   flex-wrap: wrap;
   margin-bottom: 8px;
 }

@@ -3,8 +3,8 @@ import { BUILDINGS, type BuildingTypeId, type SiteKind } from '../data/buildings
 import { FACTION_DEFS } from '../data/factions';
 import { canAfford } from '../data/resources';
 import { statsOf } from '../units/stats';
-import { formArmyFromGarrison, fuelRange, orderAttack, orderMove, orderReturn, supplyingBase, type AttackTarget } from '../campaign/armies';
-import { sendSupplyRun } from '../campaign/convoys';
+import { formArmyFromGarrison, fuelRange, orderAttack, orderMove, orderReturn, type AttackTarget } from '../campaign/armies';
+import { requestSupplyRun } from '../campaign/logistics';
 import {
   canBuildOutpost,
   OUTPOST_RANGE,
@@ -26,7 +26,6 @@ import {
   garrisonStrength,
   isOutpost,
   isVisibleToFaction,
-  nearestBaseOf,
   PLAYER_VISION_RADIUS,
   relationOf,
   strengthOf,
@@ -508,7 +507,7 @@ function thinkMilitary(ctx: SimContext, ai: AIState): void {
   // --- manage field armies ---
   for (const army of armies) {
     if (!army.aiRole) army.aiRole = 'attack';
-    requestSupplies(ctx, army);
+    requestSupplyRun(ctx, army, false);
     if (army.aiRole === 'patrol') {
       thinkPatrol(ctx, army, hostile);
       continue;
@@ -594,31 +593,6 @@ function strikePlan(state: CampaignState, fid: string, bases: Base[], caution: n
   if (!target) return null;
   if (target.target.kind !== 'building' && units.length < 5) return null;
   return { home, units, target };
-}
-
-/** A force in the field running short of fuel or ammunition gets a supply run from the nearest base that can spare it. */
-function requestSupplies(ctx: SimContext, army: Army): void {
-  const { state } = ctx;
-  if (supplyingBase(state, army)) return;
-  if (Object.values(state.convoys).some((c) => c.toArmyId === army.id)) return;
-  const home = nearestBaseOf(state, army.factionId, army.x, army.z);
-  if (!home) return;
-  let ammo = 0;
-  let ammoCap = 0;
-  for (const u of army.units) {
-    const st = statsOf(u.designId);
-    ammo += u.ammo;
-    ammoCap += st.ammoCapacity;
-  }
-  const lowFuel = fuelRange(army.units) < dist(army.x, army.z, home.x, home.z) * 1.2 + 15;
-  const lowAmmo = ammoCap > 0 && ammo < ammoCap * 0.3;
-  if (!lowFuel && !lowAmmo) return;
-  const cargo = {
-    fuel: lowFuel ? Math.max(0, Math.min(90, Math.floor(home.stock.fuel - 40))) : 0,
-    ammo: lowAmmo ? Math.max(0, Math.min(30, Math.floor(home.stock.ammo - 20))) : 0,
-  };
-  if (cargo.fuel < 10 && cargo.ammo < 5) return;
-  sendSupplyRun(ctx, home.id, army.id, cargo);
 }
 
 /** Fuelled light vehicles in a garrison, fit to scout. */

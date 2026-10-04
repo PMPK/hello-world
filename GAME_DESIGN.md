@@ -165,6 +165,9 @@ people) and garrisoned vehicles park beside the vehicle depot (or the HQ).
   stock and 12 colonists (the sending base keeps at least 8 people) travel along the road between the
   bases, or cross-country, at convoy speed; colonists join the destination's population on arrival
   (overflowing storage is left behind). Convoys can be intercepted — cargo and colonists are lost.
+  *Repeat* (every 12, 24 or 48 h) turns the load into a **standing convoy** (`src/campaign/logistics.ts`):
+  it leaves on schedule with as much of the load as the base can spare (it keeps 10 of each good and 8
+  people), is listed in the base panel with a *Stop* button, and ends when either base is lost.
 - **Relief landings** (`src/campaign/relief.ts`): an expedition that has lost every base gets a relief landing
   from Earth 3 days later (at most twice per campaign): a finished HQ, habitat and agri-dome, 30 colonists,
   starter supplies and two rifle squads, on free ground at least 90 km from hostile bases and forces, near
@@ -218,6 +221,9 @@ extra rations; ATGM teams out-range tank guns from cover but reload slowly and l
   rations to a task force in the field (prefilled with what the force needs). The convoy follows the force
   if it moves, tops up fighting vehicles first, then the trucks and the ration store, and drives home with
   whatever did not fit. It can be intercepted. The AI sends supply runs to its own forces running dry.
+  *Auto supply* (army panel toggle) does the same for a player task force: checked hourly, the nearest base
+  that can spare it sends fuel once the tanks no longer cover the way home with a margin, ammunition below
+  30% and rations for less than a day (one run at a time).
 - In battle trucks trail the force out of the line of fire and rearm/refuel units within 45 m; dry AI
   units drive back to a truck instead of leaving the field. Trucks cannot hold the field alone.
 

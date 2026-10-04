@@ -18,6 +18,7 @@ import { availableTechs, TECHS } from '../research/research';
 import { reliefEta } from '../campaign/relief';
 import { entriesSince } from '../campaign/context';
 import { CONVOY_SPEED, KEEP_AT_HOME, MANUAL_CONVOY_CAPACITY, MANUAL_CONVOY_SEATS, supplyRunProblem, transferProblem } from '../campaign/convoys';
+import { TRANSFER_INTERVALS, transfersFrom } from '../campaign/logistics';
 import { bar, btn, clear, el, fmt, ICONS, iconBtn, signed } from './dom';
 import { openModal, Toasts } from './screens';
 
@@ -58,6 +59,11 @@ export interface CampaignController {
   sendConvoy(fromId: string, toId: string, cargo: PartialStock, people: number): string | null;
   /** Dispatch a supply run to a task force; returns an error message or null. */
   sendSupplyRun(fromId: string, armyId: string, cargo: PartialStock): string | null;
+  /** Bases send supply runs on their own when the task force runs low in the field. */
+  setAutoSupply(armyId: string, on: boolean): void;
+  /** Repeat a convoy every `everyHours`; returns an error message or null. */
+  addStandingConvoy(fromId: string, toId: string, cargo: PartialStock, people: number, everyHours: number): string | null;
+  cancelStandingConvoy(id: string): void;
   confirmPlacement(): void;
   cancelPlacement(): void;
   buildOutpost(baseId: string, siteId: string): void;
@@ -789,6 +795,12 @@ export class CampaignHud {
       sr.dataset.testid = 'supply-run';
       actions.append(sr);
     }
+    if (a.factionId === s.playerFactionId && basesOf(s, a.factionId).length) {
+      const auto = btn(a.autoSupply ? 'Auto supply: on' : 'Auto supply: off', () => this.c.setAutoSupply(a.id, !a.autoSupply), a.autoSupply ? 'active' : '');
+      auto.dataset.testid = 'auto-supply';
+      auto.title = 'Bases send fuel, ammunition and rations on their own when this force runs low away from a base.';
+      actions.append(auto);
+    }
     if (a.units.length >= 2) {
       const sb = btn('Split…', () => this.openSplit(a));
       sb.dataset.testid = 'army-split';
@@ -1057,6 +1069,31 @@ export class CampaignHud {
       sc.dataset.testid = 'send-convoy';
       actions.append(sc);
     }
+    const standing = transfersFrom(s, b.id);
+    if (standing.length) {
+      const ts = this.section(body, 'Standing convoys');
+      const tl = el('div', 'list');
+      for (const t of standing) {
+        const load = Object.entries(t.cargo)
+          .filter(([, v]) => (v ?? 0) > 0)
+          .map(([k, v]) => `${v} ${RESOURCES[k as keyof typeof RESOURCES].short}`)
+          .concat(t.people ? [`${t.people} colonists`] : [])
+          .join(' · ');
+        const stop = btn('Stop', () => this.c.cancelStandingConvoy(t.id), 'small');
+        stop.dataset.testid = 'standing-stop';
+        tl.append(
+          el(
+            'div',
+            'item',
+            el('span', { class: 'badge', text: `${t.everyHours}h` }),
+            el('span', { class: 'name', style: { whiteSpace: 'normal' }, text: `→ ${s.bases[t.toBaseId]?.name ?? '?'}: ${load}` }),
+            el('span', { class: 'meta', text: `next ${formatDuration(Math.max(0, t.nextAt - s.time))}` }),
+            stop,
+          ),
+        );
+      }
+      ts.append(tl);
+    }
     body.append(actions);
     body.append(
       el('div', {
@@ -1112,6 +1149,17 @@ export class CampaignHud {
     row('people', 'Colonists', () => Math.max(0, Math.floor(from.population) - KEEP_AT_HOME), 2, () => people, (n) => {
       people = n;
     });
+    let every = 0;
+    const repeat = el('div', 'seg convoy-repeat');
+    const repeatBtns = [0, ...TRANSFER_INTERVALS].map((h) => {
+      const r = btn(h ? `Every ${h} h` : 'Once', () => {
+        every = h;
+        refresh();
+      }, 'small');
+      r.dataset.testid = `convoy-repeat-${h}`;
+      repeat.append(r);
+      return { h, r };
+    });
     const info = el('div', 'hint');
     const problemEl = el('div', 'hint bad');
     let close: () => void = () => undefined;
@@ -1121,11 +1169,14 @@ export class CampaignHud {
         problemEl.textContent = err;
         return;
       }
+      if (every) this.c.addStandingConvoy(from.id, to.id, cargo, people, every);
       close();
     }, 'primary');
     go.dataset.testid = 'convoy-dispatch';
     const refresh = (): void => {
       for (const { o, d } of destBtns) d.classList.toggle('active', o === to);
+      for (const { h, r } of repeatBtns) r.classList.toggle('active', h === every);
+      go.textContent = every ? `Dispatch · repeat every ${every} h` : 'Dispatch convoy';
       let load = 0;
       for (const k of STOCK_RESOURCES) {
         values.get(k)!.textContent = `${cargo[k] ?? 0}`;
@@ -1143,7 +1194,16 @@ export class CampaignHud {
     close = openModal(this.host, {
       kicker: `Convoy from ${from.name}`,
       title: 'Send supplies',
-      body: [el('div', { class: 'label', text: 'Destination' }), dest, grid, info, problemEl, el('div', 'actions', go)],
+      body: [
+        el('div', { class: 'label', text: 'Destination' }),
+        dest,
+        grid,
+        el('div', { class: 'label', text: 'Repeat' }),
+        repeat,
+        info,
+        problemEl,
+        el('div', 'actions', go),
+      ],
       actions: [{ label: 'Cancel', onClick: () => undefined }],
       dismissable: true,
     });

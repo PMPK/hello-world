@@ -1,7 +1,7 @@
 # CURRENT STATE
 
 *Last updated: post-MVP iteration 2 (research, garrisons, relief landings, convoys and supply runs, AI patrols,
-living bases, in-game help, ambient music, strategic intel). Schema v9; 113 unit + 16 e2e tests green.*
+living bases, in-game help, ambient music, strategic intel). Schema v10; 116 unit + 16 e2e tests green.*
 
 ## What works
 
@@ -44,6 +44,8 @@ living bases, in-game help, ambient music, strategic intel). Schema v9; 113 unit
   stock plus 12 colonists, along roads or cross-country, interceptable; arrival reported in the log.
   **Supply runs** (army panel → Supply run…) carry fuel, ammunition and rations to a task force in the
   field, follow it if it moves and bring leftovers home; the AI rescues its own forces the same way.
+  **Standing orders**: *Repeat every 12/24/48 h* in the convoy dialog (listed with *Stop* in the base panel)
+  and an *Auto supply* toggle per task force (bases send supply runs on their own when it runs low).
 - **Recovery**: an expedition that loses every base gets a relief landing from Earth 3 days later (max
   twice): finished HQ/habitat/agri-dome, 30 colonists, supplies, two squads, on safe free ground. NO BASE
   chip with the countdown in the top bar; the camera jumps to the new base.
@@ -97,14 +99,14 @@ living bases, in-game help, ambient music, strategic intel). Schema v9; 113 unit
   manual (campaign + battle).
 - **Crash guard**: a single failing frame is skipped; 30 in a row stop the game with a "The simulation
   stopped" dialog (error text, Reload / Main menu) instead of a silent freeze. Saves are untouched.
-- **Tests**: 113 Vitest unit tests; Playwright smoke tests on phone-landscape touch and desktop mouse profiles
+- **Tests**: 116 Vitest unit tests; Playwright smoke tests on phone-landscape touch and desktop mouse profiles
   (full loop incl. unit card, save/continue, save-slot listing and import; fortified base assault;
   task force split/merge; founding a base and sending it a convoy; research lab project switching;
-  tap-to-garrison in a base battle; supply run to a task force; intel alert → Show → last known
+  tap-to-garrison in a base battle; supply run and auto supply for a task force; standing convoy set up and stopped; intel alert → Show → last known
   position marker → overview contact; crash dialog after an injected fault).
-- **Save schema v9** (Building.repeat in v2, CampaignState.difficulty in v3, research shelf in v4, relief
+- **Save schema v10** (Building.repeat in v2, CampaignState.difficulty in v3, research shelf in v4, relief
   landing state per faction in v5, convoy colonists in v6, AI patrol clock in v7, supply-run target in v8,
-  per-faction intel in v9) with migrations from v1.
+  per-faction intel in v9, standing convoys and army auto-supply in v10) with migrations from v1.
 - **Deployment**: GitHub Actions CI + Pages deploy workflow (gh-pages branch). A single-file build is also
   published as a claude.ai Artifact (https://claude.ai/artifact/7qGUMq5vWjnaNKRHEyempW).
 
@@ -164,8 +166,7 @@ is listed per day), `npm run sim:battle` (`ONLY=<label>` filters matrix lines), 
 1. **AI long-range recon**: the rival hunts lost contacts and warns its bases from its intel, but its jeeps
    cannot reach your base (patrols stay within 110 km of home), so its base assaults still use the true
    garrison strength. Longer recon runs (or recon flights) would let it use its own base reports instead.
-2. **Logistics depth**: escorts for convoys and supply runs; standing orders (repeat a convoy or supply run);
-   AI escorts for its own convoys.
+2. **Logistics depth**: escorts for convoys and supply runs; AI escorts for its own convoys.
 3. **Battle**: infantry capturing enemy structures; infantry garrisoning bunkers (extra crew); garrisoned
    squads firing from the building edge instead of its centre.
 4. **Base specialisation** (e.g. mining town, fortress, depot) on top of the existing per-base economy.

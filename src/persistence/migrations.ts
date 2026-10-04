@@ -62,6 +62,13 @@ export const MIGRATIONS: Record<number, Migration> = {
     for (const id of Object.keys(factions)) intel[id] = { armies: {}, bases: {} };
     return { ...s, intel: s.intel ?? intel, version: 9 };
   },
+  // v10: logistics orders (automatic supply runs, standing convoys)
+  9: (s) => {
+    const armies = (s.armies ?? {}) as Record<string, Record<string, unknown>>;
+    const out: Record<string, Record<string, unknown>> = {};
+    for (const [id, a] of Object.entries(armies)) out[id] = { ...a, autoSupply: a.autoSupply ?? false };
+    return { ...s, armies: out, transfers: s.transfers ?? {}, version: 10 };
+  },
 };
 
 export function migrateState(raw: Record<string, unknown>): CampaignState {

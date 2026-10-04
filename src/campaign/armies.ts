@@ -191,6 +191,7 @@ export function createArmy(
     lastBattleTime: -999,
     repathAt: 0,
     aiRole: null,
+    autoSupply: false,
   };
   army.food = maxRations(army);
   state.armies[id] = army;

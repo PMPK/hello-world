@@ -59,7 +59,7 @@ test('full loop: campaign → move army → tactical battle → back to campaign
   await px(page, (p) => {
     const s = p.state();
     const a = Object.values(s.armies as Record<string, any>).find((x: any) => x.factionId === s.playerFactionId);
-    p.app.campaign.focusOn(a.x, a.z, 40);
+    p.app.campaign.view.rig.jumpTo(a.x, a.z + 4, 40);
   });
   await page.waitForTimeout(1200);
   const pos = await px(page, (p) => {
@@ -303,12 +303,19 @@ test('found a new base from the base panel', async ({ page }, info) => {
   await page.getByTestId('convoy-plus-minerals').click();
   await page.getByTestId('convoy-plus-minerals').click();
   await page.getByTestId('convoy-plus-people').click();
+  await page.getByTestId('convoy-repeat-24').click();
   await page.getByTestId('convoy-dispatch').click();
   const convoy = await px(page, (p) => {
     const c = Object.values(p.state().convoys as Record<string, any>).find((x: any) => x.fromBuildingId.startsWith('manual:'));
     return c ? { ore: c.cargo.minerals, people: c.people } : null;
   });
   expect(convoy).toEqual({ ore: 20, people: 2 });
+  // ...and it repeats every day until stopped
+  const standing = await px(page, (p) => Object.values(p.state().transfers as Record<string, any>).map((t: any) => ({ every: t.everyHours, ore: t.cargo.minerals })));
+  expect(standing).toEqual([{ every: 24, ore: 20 }]);
+  await expect(page.getByTestId('standing-stop')).toBeVisible();
+  await page.getByTestId('standing-stop').click();
+  expect(await px(page, (p) => Object.keys(p.state().transfers).length)).toBe(0);
   expect(errors).toEqual([]);
 });
 
@@ -377,6 +384,9 @@ test('send a supply run to a task force in the field', async ({ page }) => {
     base.stock.fuel = 200;
     p.app.campaign.select({ kind: 'army', id: army.id });
   });
+  // automatic supply can be switched on from the same panel
+  await page.getByTestId('auto-supply').click();
+  expect(await px(page, (p) => p.state().armies[p.app.campaign.selection.id].autoSupply)).toBe(true);
   await page.getByTestId('supply-run').click();
   await page.getByTestId('supply-dispatch').click();
   const run = await px(page, (p) => {

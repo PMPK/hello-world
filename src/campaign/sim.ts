@@ -7,6 +7,7 @@ import { stepDiplomacy } from './diplomacy';
 import { detectEncounters } from './encounters';
 import { stepEvents } from './events';
 import { stepIntel } from './intel';
+import { stepLogistics } from './logistics';
 import { armiesOf, basesOf } from './queries';
 import { stepRelief } from './relief';
 
@@ -19,6 +20,7 @@ export function stepCampaign(ctx: SimContext, dt: number): void {
   const bases = Object.values(state.bases).sort((a, b) => (a.id < b.id ? -1 : 1));
   for (const base of bases) stepBaseEconomy(ctx, base, dt);
   stepConvoys(ctx, dt);
+  stepLogistics(ctx);
   stepArmies(ctx, dt);
   stepStrategicAI(ctx, dt);
   stepDiplomacy(ctx, dt);

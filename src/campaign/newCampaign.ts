@@ -61,6 +61,7 @@ function blankState(seed: number, difficulty: Difficulty): CampaignState {
     sites: {},
     armies: {},
     convoys: {},
+    transfers: {},
     roads: {},
     characters: {},
     relations: [],

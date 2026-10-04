@@ -20,7 +20,7 @@ buildings); battle results are written back into the persistent campaign.
   persist → strategic map. Read the design docs before changing mechanics.
 - **Save compatibility**: `CampaignState` (`src/campaign/types.ts`) is persisted as JSON. When its shape
   changes, bump `STATE_VERSION` and add a migration in `src/persistence/migrations.ts` plus a test.
-  Never silently break existing saves. (Current schema: v9.)
+  Never silently break existing saves. (Current schema: v10.)
 - **Mobile first**: landscape Android Chrome is the primary target. Touch targets ≥ 42 px, nothing
   hover-only, keep triangle counts and draw calls low (budgets in ARCHITECTURE.md), test the `low`
   quality profile. Desktop also supports mouse + keyboard.
@@ -63,10 +63,11 @@ Write long headless output to a file (`> out.txt`); piped `npx` output is buffer
 | Tactical mode (selection, orders, camera, audio) | `src/app/battleMode.ts` |
 | Campaign state types + `STATE_VERSION` | `src/campaign/types.ts` |
 | New campaign / world rebuild on load | `src/campaign/newCampaign.ts` |
-| Campaign step order (economy → convoys → armies → AI → diplomacy → events → intel → encounters → defeat → relief) | `src/campaign/sim.ts` |
+| Campaign step order (economy → convoys → logistics → armies → AI → diplomacy → events → intel → encounters → defeat → relief) | `src/campaign/sim.ts` |
 | Armies: movement, supply, rations, trucks, split/merge | `src/campaign/armies.ts` |
 | Construction, outposts, roads / production queues | `src/campaign/construction.ts`, `src/campaign/production.ts` |
 | Founding bases, supply convoys, relief landings | `src/campaign/expansion.ts`, `src/campaign/convoys.ts`, `src/campaign/relief.ts` |
+| Standing convoys, automatic supply runs (shared with the AI) | `src/campaign/logistics.ts` |
 | Contacts → pending battles, outpost capture | `src/campaign/encounters.ts` |
 | Strategic intel: sightings, last known positions, base reports (fog of war in `queries.ts`) | `src/campaign/intel.ts` |
 | Diplomacy (standoff → hostile tension), random events, Earth shuttles | `src/campaign/diplomacy.ts`, `src/campaign/events.ts` |
