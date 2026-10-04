@@ -47,6 +47,7 @@ describe('AI recon patrols', () => {
       toBaseId: c.pBase.id,
       cargo: { food: 30 },
       people: 0,
+      toArmyId: null,
       path: [{ x: c.pBase.x, z: c.pBase.z }],
       x: p.x + 12,
       z: p.z,

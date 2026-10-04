@@ -357,3 +357,33 @@ test('a persistent runtime error stops the game with a way back to the menu', as
   await page.getByRole('button', { name: 'Main menu' }).click();
   await expect(page.getByTestId('new-campaign')).toBeVisible();
 });
+
+test('send a supply run to a task force in the field', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto('/');
+  await page.getByTestId('new-campaign').click();
+  await page.getByTestId('intro-skip').click();
+  await expect(page.getByTestId('menu')).toBeVisible();
+  await page.getByTestId('speed-0').click();
+  await px(page, (p) => {
+    const s = p.state();
+    const base = Object.values(s.bases as Record<string, any>).find((b: any) => b.factionId === s.playerFactionId);
+    const army = Object.values(s.armies as Record<string, any>).find((a: any) => a.factionId === s.playerFactionId);
+    // out in the field, thirsty
+    army.x = base.x + 30;
+    army.z = base.z + 4;
+    for (const u of army.units) u.fuel = Math.min(u.fuel, 3);
+    base.stock.fuel = 200;
+    p.app.campaign.select({ kind: 'army', id: army.id });
+  });
+  await page.getByTestId('supply-run').click();
+  await page.getByTestId('supply-dispatch').click();
+  const run = await px(page, (p) => {
+    const c = Object.values(p.state().convoys as Record<string, any>).find((x: any) => x.toArmyId);
+    return c ? { fuel: c.cargo.fuel ?? 0 } : null;
+  });
+  expect(run).not.toBeNull();
+  expect(run!.fuel).toBeGreaterThan(0);
+  expect(errors).toEqual([]);
+});

@@ -3,7 +3,9 @@ import { RESOURCES, STOCK_RESOURCES, stockTotal, type PartialStock, type StockRe
 import { depositToBase } from '../economy/economy';
 import { log, newId, type SimContext } from './context';
 import { areHostile, nearestBaseOf } from './queries';
-import type { Base, Convoy } from './types';
+import type { Army, Base, CampaignState, Convoy } from './types';
+import { isSupport, maxRations } from './armies';
+import { statsOf } from '../units/stats';
 
 export const CONVOY_SPEED = 12; // map units per hour
 export const CONVOY_LOAD = 15;
@@ -35,6 +37,7 @@ export function stepConvoys(ctx: SimContext, dt: number): void {
       toBaseId: base.id,
       cargo,
       people: 0,
+      toArmyId: null,
       path: path.slice(1),
       x: b.x,
       z: b.z,
@@ -46,6 +49,26 @@ export function stepConvoys(ctx: SimContext, dt: number): void {
 
   // movement / delivery / interception
   for (const c of Object.values(state.convoys)) {
+    if (c.toArmyId) {
+      const army = state.armies[c.toArmyId];
+      if (army && army.factionId === c.factionId) {
+        // keep heading for the force, re-planning only when it has moved well away from our goal
+        const end = c.path[c.path.length - 1];
+        if (!end || dist(end.x, end.z, army.x, army.z) > 6) c.path = ctx.world.findArmyPath({ x: c.x, z: c.z }, { x: army.x, z: army.z }) ?? [{ x: army.x, z: army.z }];
+        advance(ctx, c, dt);
+        if (dist(c.x, c.z, army.x, army.z) < 2.5) {
+          deliverToArmy(state, c, army);
+          sendHome(ctx, c);
+          continue;
+        }
+        intercepted(state, c);
+        continue;
+      }
+      // the force is gone: bring the cargo home
+      if (state.factions[c.factionId]?.isPlayer) log(state, 'A supply run lost its task force and is turning back.', 'warn', c.factionId);
+      sendHome(ctx, c);
+      if (!state.convoys[c.id]) continue;
+    }
     let base = state.bases[c.toBaseId];
     if (!base || base.factionId !== c.factionId) {
       // the destination fell: head for the nearest base we still hold
@@ -62,21 +85,7 @@ export function stepConvoys(ctx: SimContext, dt: number): void {
       base = refuge;
       if (player && c.fromBuildingId.startsWith('manual:')) log(state, `Its destination has fallen: a convoy is turning back to ${refuge.name}.`, 'warn', c.factionId);
     }
-    let move = CONVOY_SPEED * ctx.world.speedFactorAt(c.x, c.z) * dt;
-    while (move > 0 && c.path.length > 0) {
-      const wp = c.path[0];
-      const d = dist(c.x, c.z, wp.x, wp.z);
-      if (d <= move) {
-        c.x = wp.x;
-        c.z = wp.z;
-        move -= d;
-        c.path.shift();
-      } else {
-        c.x += ((wp.x - c.x) / d) * move;
-        c.z += ((wp.z - c.z) / d) * move;
-        move = 0;
-      }
-    }
+    advance(ctx, c, dt);
     if (c.path.length === 0 || dist(c.x, c.z, base.x, base.z) < 1) {
       const lost = depositToBase(state, base, c.cargo);
       base.population += c.people;
@@ -87,18 +96,85 @@ export function stepConvoys(ctx: SimContext, dt: number): void {
       }
       continue;
     }
-    for (const a of Object.values(state.armies)) {
-      if (!areHostile(state, a.factionId, c.factionId)) continue;
-      if (dist(a.x, a.z, c.x, c.z) < INTERCEPT_RADIUS) {
-        delete state.convoys[c.id];
-        if (state.factions[c.factionId]?.isPlayer) {
-          log(state, `A supply convoy was intercepted and destroyed by hostile forces.${c.people ? ` ${c.people} colonists were lost.` : ''}`, 'warn', c.factionId);
-        }
-        else if (state.factions[a.factionId]?.isPlayer) log(state, `${a.name} intercepted an enemy supply convoy.`, 'battle', a.factionId);
-        break;
-      }
+    intercepted(state, c);
+  }
+}
+
+/** Move a convoy along its path at convoy speed (faster on roads). */
+function advance(ctx: SimContext, c: Convoy, dt: number): void {
+  let move = CONVOY_SPEED * ctx.world.speedFactorAt(c.x, c.z) * dt;
+  while (move > 0 && c.path.length > 0) {
+    const wp = c.path[0];
+    const d = dist(c.x, c.z, wp.x, wp.z);
+    if (d <= move) {
+      c.x = wp.x;
+      c.z = wp.z;
+      move -= d;
+      c.path.shift();
+    } else {
+      c.x += ((wp.x - c.x) / d) * move;
+      c.z += ((wp.z - c.z) / d) * move;
+      move = 0;
     }
   }
+}
+
+/** A hostile force on top of the convoy destroys it (true when it was destroyed). */
+function intercepted(state: CampaignState, c: Convoy): boolean {
+  for (const a of Object.values(state.armies)) {
+    if (!areHostile(state, a.factionId, c.factionId)) continue;
+    if (dist(a.x, a.z, c.x, c.z) < INTERCEPT_RADIUS) {
+      delete state.convoys[c.id];
+      if (state.factions[c.factionId]?.isPlayer) {
+        log(state, `A supply convoy was intercepted and destroyed by hostile forces.${c.people ? ` ${c.people} colonists were lost.` : ''}`, 'warn', c.factionId);
+      } else if (state.factions[a.factionId]?.isPlayer) log(state, `${a.name} intercepted an enemy supply convoy.`, 'battle', a.factionId);
+      return true;
+    }
+  }
+  return false;
+}
+
+/** Hand fuel, ammunition and rations to the task force; whatever does not fit stays on the trucks. */
+function deliverToArmy(state: CampaignState, c: Convoy, army: Army): void {
+  const given = { fuel: 0, ammo: 0, food: 0 };
+  // fighting vehicles first, then the trucks' own tanks and cargo space
+  const order = army.units.slice().sort((a, b) => Number(isSupport(a.designId)) - Number(isSupport(b.designId)));
+  for (const kind of ['fuel', 'ammo'] as const) {
+    let left = c.cargo[kind] ?? 0;
+    for (const u of order) {
+      if (left <= 0) break;
+      const st = statsOf(u.designId);
+      const cap = kind === 'fuel' ? st.fuelCapacity : st.ammoCapacity;
+      if (cap <= 0) continue;
+      const give = Math.min(left, cap - u[kind]);
+      if (give <= 0) continue;
+      u[kind] += give;
+      left -= give;
+      given[kind] += give;
+    }
+    c.cargo[kind] = left;
+  }
+  const food = Math.min(c.cargo.food ?? 0, Math.max(0, maxRations(army) - army.food));
+  army.food += food;
+  c.cargo.food = (c.cargo.food ?? 0) - food;
+  given.food = food;
+  if (state.factions[c.factionId]?.isPlayer) {
+    log(state, `Supply run reached ${army.name}: +${Math.round(given.fuel)} fuel, +${Math.round(given.ammo)} ammunition, +${Math.round(given.food)} rations.`, 'econ', c.factionId);
+  }
+}
+
+/** Point the convoy back at its home base (or drop it when empty or homeless). */
+function sendHome(ctx: SimContext, c: Convoy): void {
+  const { state } = ctx;
+  c.toArmyId = null;
+  const home = state.bases[c.toBaseId]?.factionId === c.factionId ? state.bases[c.toBaseId] : nearestBaseOf(state, c.factionId, c.x, c.z);
+  const path = home ? ctx.world.findArmyPath({ x: c.x, z: c.z }, { x: home.x, z: home.z }) : null;
+  if (!home || !path || stockTotal(c.cargo) < 1) {
+    delete state.convoys[c.id];
+    return;
+  }
+  c.toBaseId = home.id;
+  c.path = path;
 }
 
 /** Resources a sister base ships to a young base, with the stock each side keeps. */
@@ -147,6 +223,7 @@ function dispatchSupplyConvoys(ctx: SimContext): void {
       toBaseId: to.id,
       cargo,
       people: 0,
+      toArmyId: null,
       path: road.points.slice(1),
       x: from.x,
       z: from.z,
@@ -222,6 +299,59 @@ export function sendConvoy(ctx: SimContext, fromId: string, toId: string, cargo:
     toBaseId: to.id,
     cargo: load,
     people,
+    toArmyId: null,
+    path,
+    x: from.x,
+    z: from.z,
+  };
+  state.convoys[c.id] = c;
+  return { ok: true, convoy: c };
+}
+
+/** What a supply run may carry to a task force. */
+export const SUPPLY_RUN_GOODS: StockResourceId[] = ['fuel', 'ammo', 'food'];
+
+/** Why a supply run cannot go, or null when it can. */
+export function supplyRunProblem(from: Base | undefined, army: Army | undefined, cargo: PartialStock): string | null {
+  if (!from || !army) return 'Choose a base and a task force';
+  if (army.factionId !== from.factionId) return 'Supply runs only go to your own task forces';
+  let load = 0;
+  for (const k of STOCK_RESOURCES) {
+    const v = cargo[k] ?? 0;
+    if (v <= 0) continue;
+    if (!SUPPLY_RUN_GOODS.includes(k)) return 'Supply runs carry fuel, ammunition and rations only';
+    if (v > from.stock[k] + 1e-6) return `Not enough ${RESOURCES[k].name.toLowerCase()} in ${from.name}`;
+    load += v;
+  }
+  if (load > MANUAL_CONVOY_CAPACITY + 1e-6) return `A convoy carries at most ${MANUAL_CONVOY_CAPACITY} units`;
+  if (load < 1) return 'Load something first';
+  return null;
+}
+
+/** Send fuel, ammunition and rations from a base to a task force in the field; the trucks drive back afterwards. */
+export function sendSupplyRun(ctx: SimContext, fromId: string, armyId: string, cargo: PartialStock): ConvoyResult {
+  const { state } = ctx;
+  const from = state.bases[fromId];
+  const army = state.armies[armyId];
+  const problem = supplyRunProblem(from, army, cargo);
+  if (problem) return { ok: false, reason: problem };
+  const path = ctx.world.findArmyPath({ x: from.x, z: from.z }, { x: army.x, z: army.z });
+  if (!path) return { ok: false, reason: 'No route to the task force' };
+  const load: PartialStock = {};
+  for (const k of SUPPLY_RUN_GOODS) {
+    const v = cargo[k] ?? 0;
+    if (v <= 0) continue;
+    load[k] = v;
+    from.stock[k] -= v;
+  }
+  const c: Convoy = {
+    id: newId(state, 'c'),
+    factionId: from.factionId,
+    fromBuildingId: `supply:${from.id}`,
+    toBaseId: from.id,
+    cargo: load,
+    people: 0,
+    toArmyId: army.id,
     path,
     x: from.x,
     z: from.z,

@@ -15,7 +15,7 @@ import { statsOf } from '../units/stats';
 import { defenseStatsOf } from '../units/defense';
 import { availableTechs, TECHS } from '../research/research';
 import { reliefEta } from '../campaign/relief';
-import { CONVOY_SPEED, KEEP_AT_HOME, MANUAL_CONVOY_CAPACITY, MANUAL_CONVOY_SEATS, transferProblem } from '../campaign/convoys';
+import { CONVOY_SPEED, KEEP_AT_HOME, MANUAL_CONVOY_CAPACITY, MANUAL_CONVOY_SEATS, supplyRunProblem, transferProblem } from '../campaign/convoys';
 import { bar, btn, clear, el, fmt, ICONS, iconBtn, signed } from './dom';
 import { openModal, Toasts } from './screens';
 
@@ -50,6 +50,8 @@ export interface CampaignController {
   beginBaseFounding(fromBaseId: string): void;
   /** Dispatch a hand-loaded convoy; returns an error message or null. */
   sendConvoy(fromId: string, toId: string, cargo: PartialStock, people: number): string | null;
+  /** Dispatch a supply run to a task force; returns an error message or null. */
+  sendSupplyRun(fromId: string, armyId: string, cargo: PartialStock): string | null;
   confirmPlacement(): void;
   cancelPlacement(): void;
   buildOutpost(baseId: string, siteId: string): void;
@@ -731,6 +733,12 @@ export class CampaignHud {
       actions.append(btn('Garrison', () => this.c.armyGarrison(a.id)));
       if (atBase.garrison.length) actions.append(btn(`Reinforce (${atBase.garrison.length})`, () => this.c.armyReinforce(a.id)));
     }
+    if (!supplier && a.factionId === s.playerFactionId && basesOf(s, a.factionId).length) {
+      const inbound = Object.values(s.convoys).some((c) => c.toArmyId === a.id);
+      const sr = btn(inbound ? 'Supply run en route' : 'Supply run…', () => this.openSupplyRun(a), inbound ? 'disabled' : '');
+      sr.dataset.testid = 'supply-run';
+      actions.append(sr);
+    }
     if (a.units.length >= 2) {
       const sb = btn('Split…', () => this.openSplit(a));
       sb.dataset.testid = 'army-split';
@@ -746,6 +754,96 @@ export class CampaignHud {
     body.append(actions);
     body.append(el('div', { class: 'hint', text: 'Tap terrain to move (right-click with a mouse). Tap an enemy force, base or outpost to attack. Forces resupply automatically near a friendly base.' }));
     return panel;
+  }
+
+  /** Load a supply run (fuel, ammunition, rations) from one of our bases to a task force in the field. */
+  private openSupplyRun(a: Army): void {
+    const s = this.c.state;
+    const bases = basesOf(s, a.factionId).sort((p, q) => dist(p.x, p.z, a.x, a.z) - dist(q.x, q.z, a.x, a.z));
+    if (!bases.length) return;
+    let from = bases[0];
+    // what the force could take right now
+    const need = { fuel: 0, ammo: 0, food: Math.max(0, Math.floor(maxRations(a) - a.food)) };
+    for (const u of a.units) {
+      const st = statsOf(u.designId);
+      need.fuel += Math.max(0, st.fuelCapacity - u.fuel);
+      need.ammo += Math.max(0, st.ammoCapacity - u.ammo);
+    }
+    const cargo: PartialStock = {};
+    const prefill = (): void => {
+      let room = MANUAL_CONVOY_CAPACITY;
+      for (const k of ['fuel', 'ammo', 'food'] as const) {
+        const v = Math.max(0, Math.min(Math.ceil(need[k] / 10) * 10, Math.floor(from.stock[k] / 10) * 10, room));
+        cargo[k] = v;
+        room -= v;
+      }
+    };
+    prefill();
+    const dest = el('div', 'seg convoy-dest');
+    const srcBtns = bases.map((b) => {
+      const d = btn(`${b.name} · ${Math.round(dist(b.x, b.z, a.x, a.z))} km`, () => {
+        from = b;
+        prefill();
+        refresh();
+      }, 'small');
+      dest.append(d);
+      return { b, d };
+    });
+    const grid = el('div', 'convoy-grid');
+    const values = new Map<string, HTMLElement>();
+    const labels: Record<'fuel' | 'ammo' | 'food', string> = { fuel: 'Fuel', ammo: 'Ammunition', food: 'Rations' };
+    const haves = new Map<string, HTMLElement>();
+    for (const k of ['fuel', 'ammo', 'food'] as const) {
+      const v = el('span', { class: 'mono convoy-v' });
+      values.set(k, v);
+      const have = el('div', { class: 'muted mono' });
+      haves.set(k, have);
+      const minus = btn('−', () => {
+        cargo[k] = Math.max(0, (cargo[k] ?? 0) - 10);
+        refresh();
+      }, 'convoy-step');
+      const plus = btn('+', () => {
+        cargo[k] = Math.min(Math.floor(from.stock[k]), (cargo[k] ?? 0) + 10);
+        refresh();
+      }, 'convoy-step');
+      minus.dataset.testid = `supply-minus-${k}`;
+      plus.dataset.testid = `supply-plus-${k}`;
+      grid.append(el('div', 'convoy-row', el('div', 'convoy-label', el('div', { text: labels[k] }), have), minus, v, plus));
+    }
+    const info = el('div', 'hint');
+    const problemEl = el('div', 'hint bad');
+    let close: () => void = () => undefined;
+    const go = btn('Dispatch supply run', () => {
+      const err = this.c.sendSupplyRun(from.id, a.id, cargo);
+      if (err) {
+        problemEl.textContent = err;
+        return;
+      }
+      close();
+    }, 'primary');
+    go.dataset.testid = 'supply-dispatch';
+    const refresh = (): void => {
+      for (const { b, d } of srcBtns) d.classList.toggle('active', b === from);
+      let load = 0;
+      for (const k of ['fuel', 'ammo', 'food'] as const) {
+        values.get(k)!.textContent = `${cargo[k] ?? 0}`;
+        haves.get(k)!.textContent = `needs ${Math.round(need[k])} · base has ${fmt(from.stock[k])}`;
+        load += cargo[k] ?? 0;
+      }
+      const hours = dist(from.x, from.z, a.x, a.z) / CONVOY_SPEED;
+      info.textContent = `Load ${load} / ${MANUAL_CONVOY_CAPACITY} · about ${formatDuration(hours)} to reach ${a.name} (it is followed if it moves). What the force cannot take comes back. Convoys can be intercepted.`;
+      const problem = load < 1 ? null : supplyRunProblem(from, a, cargo);
+      problemEl.textContent = problem ?? '';
+      go.classList.toggle('disabled', !!problem || load < 1);
+    };
+    refresh();
+    close = openModal(this.host, {
+      kicker: `Supply run · ${a.name}`,
+      title: 'Send supplies to the field',
+      body: [el('div', { class: 'label', text: 'From' }), dest, grid, info, problemEl, el('div', 'actions', go)],
+      actions: [{ label: 'Cancel', onClick: () => undefined }],
+      dismissable: true,
+    });
   }
 
   /** Choose units to detach into a new task force. */

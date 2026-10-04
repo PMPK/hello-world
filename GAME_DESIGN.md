@@ -204,6 +204,10 @@ extra rations; ATGM teams out-range tank guns from cover but reload slowly and l
   giving away their own 25-fuel reserve; each truck adds 40 rations. The army's fuel range pools truck
   cargo with the vehicles' tanks. Each expedition starts with one truck in its task force; the AI adds
   one per ~8 fighting units.
+- **Supply runs** (army panel → *Supply run…*): a base sends up to 120 units of fuel, ammunition and
+  rations to a task force in the field (prefilled with what the force needs). The convoy follows the force
+  if it moves, tops up fighting vehicles first, then the trucks and the ration store, and drives home with
+  whatever did not fit. It can be intercepted. The AI sends supply runs to its own forces running dry.
 - In battle trucks trail the force out of the line of fire and rearm/refuel units within 45 m; dry AI
   units drive back to a truck instead of leaving the field. Trucks cannot hold the field alone.
 

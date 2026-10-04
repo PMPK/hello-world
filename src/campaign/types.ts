@@ -11,7 +11,7 @@ import type { ResearchState } from '../research/research';
  */
 
 /** Bump when the shape of CampaignState changes; add a migration in persistence/migrations.ts. */
-export const STATE_VERSION = 7;
+export const STATE_VERSION = 8;
 
 export interface UnitInstance {
   id: string;
@@ -162,6 +162,8 @@ export interface Convoy {
   cargo: PartialStock;
   /** Colonists travelling with the convoy (added to the destination's population on arrival). */
   people: number;
+  /** Supply run: the task force it is driving to (then it returns to `toBaseId` with what is left). */
+  toArmyId: string | null;
   path: Vec2[];
   x: number;
   z: number;

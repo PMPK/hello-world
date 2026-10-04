@@ -37,6 +37,8 @@
 - **Diplomacy**: standoff with rising tension → AI goes weapons-free at 100%; player attacks start hostilities.
 - **Transfers**: hand-sent convoys between your bases (base panel → Send convoy…): up to 120 units of
   stock plus 12 colonists, along roads or cross-country, interceptable; arrival reported in the log.
+  **Supply runs** (army panel → Supply run…) carry fuel, ammunition and rations to a task force in the
+  field, follow it if it moves and bring leftovers home; the AI rescues its own forces the same way.
 - **Recovery**: an expedition that loses every base gets a relief landing from Earth 3 days later (max
   twice): finished HQ/habitat/agri-dome, 30 colonists, supplies, two squads, on safe free ground. NO BASE
   chip with the countdown in the top bar; the camera jumps to the new base.
@@ -86,12 +88,13 @@
   manual (campaign + battle).
 - **Crash guard**: a single failing frame is skipped; 30 in a row stop the game with a "The simulation
   stopped" dialog (error text, Reload / Main menu) instead of a silent freeze. Saves are untouched.
-- **Tests**: 92 Vitest unit tests; Playwright smoke tests on phone-landscape touch and desktop mouse profiles
+- **Tests**: 97 Vitest unit tests; Playwright smoke tests on phone-landscape touch and desktop mouse profiles
   (full loop incl. unit card, save/continue, save-slot listing and import; fortified base assault;
   task force split/merge; founding a base and sending it a convoy; research lab project switching;
-  tap-to-garrison in a base battle; crash dialog after an injected fault).
-- **Save schema v7** (Building.repeat in v2, CampaignState.difficulty in v3, research shelf in v4, relief
-  landing state per faction in v5, convoy colonists in v6, AI patrol clock in v7) with migrations from v1.
+  tap-to-garrison in a base battle; supply run to a task force; crash dialog after an injected fault).
+- **Save schema v8** (Building.repeat in v2, CampaignState.difficulty in v3, research shelf in v4, relief
+  landing state per faction in v5, convoy colonists in v6, AI patrol clock in v7, supply-run target in v8)
+  with migrations from v1.
 - **Deployment**: GitHub Actions CI + Pages deploy workflow (gh-pages branch). A single-file build is also
   published as a claude.ai Artifact (https://claude.ai/artifact/7qGUMq5vWjnaNKRHEyempW).
 
@@ -105,8 +108,8 @@
 
 ## Known issues / limitations
 
-- Field armies without supply trucks cannot resupply away from a base; trucks themselves only refill at bases.
-  The army panel shows fuel range and truck cargo; the map flags LOW FUEL / LOW AMMO.
+- Away from bases, task forces resupply from their own trucks or from supply runs sent by a base; the army
+  panel shows fuel range and truck cargo; the map flags LOW FUEL / LOW AMMO.
 - Battle unit separation is simple; large groups can jostle around obstacles. Paths are re-planned when blocked.
 - Infantry squads are drawn as up to 6 figures; there are no death animations (squads shrink).
 - Buildings block movement as circles. Garrisoned squads are invisible as figures (badge only) and fire
@@ -133,7 +136,7 @@ is listed per day), `npm run sim:battle` (`ONLY=<label>` filters matrix lines), 
 
 ## Best next tasks
 
-1. Logistics depth: convoys that resupply field armies from bases; trucks as convoy escorts/targets.
+1. Logistics depth: escorts for convoys and supply runs; standing supply orders (repeat a run).
 2. Defences: let the player see/attack enemy positions from the campaign map (intel), and garrison
    infantry inside bunkers.
 3. Infantry capturing enemy structures in battle; garrisoning bunkers (extra crew).
