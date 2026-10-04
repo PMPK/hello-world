@@ -68,11 +68,12 @@
   acknowledgements, radio chirps for reports, contact alarm, wind ambience; Sound Off/Low/Medium/High in
   settings, M to mute.
 - **Auto-resolve** runs in time slices with a progress dialog (no main-thread freeze on phones).
-- **Tests**: 81 Vitest unit tests; Playwright smoke tests on phone-landscape touch and desktop mouse profiles
+- **Tests**: 85 Vitest unit tests; Playwright smoke tests on phone-landscape touch and desktop mouse profiles
   (full loop incl. unit card, save/continue, save-slot listing and import; fortified base assault;
-  task force split/merge; founding a base; research lab project switching; tap-to-garrison in a base battle).
-- **Save schema v5** (Building.repeat in v2, CampaignState.difficulty in v3, research shelf in v4, relief
-  landing state per faction in v5) with migrations from v1.
+  task force split/merge; founding a base and sending it a convoy; research lab project switching;
+  tap-to-garrison in a base battle).
+- **Save schema v6** (Building.repeat in v2, CampaignState.difficulty in v3, research shelf in v4, relief
+  landing state per faction in v5, convoy colonists in v6) with migrations from v1.
 - **Deployment**: GitHub Actions CI + Pages deploy workflow (gh-pages branch). A single-file build is also
   published as a claude.ai Artifact (https://claude.ai/artifact/7qGUMq5vWjnaNKRHEyempW).
 
@@ -101,6 +102,8 @@
 - Headless Chromium uses SwiftShader in tests; real-device performance has been budgeted (≈100k triangles on
   medium) but not profiled on a physical phone in this session.
 
+- **Transfers**: hand-sent convoys between your bases (base panel → Send convoy…): up to 120 units of
+  stock plus 12 colonists, along roads or cross-country, interceptable; arrival reported in the log.
 - **Recovery**: an expedition that loses every base gets a relief landing from Earth 3 days later (max
   twice): finished HQ/habitat/agri-dome, 30 colonists, supplies, two squads, on safe free ground. NO BASE
   chip with the countdown in the top bar; the camera jumps to the new base.
@@ -127,7 +130,7 @@ is listed per day), `npm run sim:battle` (`ONLY=<label>` filters matrix lines), 
    infantry inside bunkers.
 3. Infantry capturing enemy structures in battle; garrisoning bunkers (extra crew).
 4. AI scouting behaviour (recon patrols) to make use of its fog of war; per-difficulty starting bonuses.
-5. Manual supply/population transfers between bases; base specialisation.
+5. Base specialisation; standing transfer orders (repeat a convoy) and convoy escorts.
 6. Battle simulation in a Web Worker; spatial hash for targeting.
 7. Audio polish: music stems, distant battle rumble on the campaign map, per-faction radio voices.
 8. Tutorial scenario using the directive system in `CampaignHud.updateDirective`.

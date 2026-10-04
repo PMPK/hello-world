@@ -20,7 +20,7 @@ buildings); battle results are written back into the persistent campaign.
   persist → strategic map. Read the design docs before changing mechanics.
 - **Save compatibility**: `CampaignState` (`src/campaign/types.ts`) is persisted as JSON. When its shape
   changes, bump `STATE_VERSION` and add a migration in `src/persistence/migrations.ts` plus a test.
-  Never silently break existing saves. (Current schema: v5.)
+  Never silently break existing saves. (Current schema: v6.)
 - **Mobile first**: landscape Android Chrome is the primary target. Touch targets ≥ 42 px, nothing
   hover-only, keep triangle counts and draw calls low (budgets in ARCHITECTURE.md), test the `low`
   quality profile. Desktop also supports mouse + keyboard.

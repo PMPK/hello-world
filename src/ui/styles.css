@@ -562,6 +562,41 @@ body {
   min-height: 0;
 }
 
+/* ---------- convoy dialog ---------- */
+.convoy-dest {
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.convoy-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 6px 14px;
+  margin: 6px 0 8px;
+}
+.convoy-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.convoy-label {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  line-height: 1.25;
+}
+.convoy-label .muted {
+  font-size: 11px;
+}
+.btn.convoy-step {
+  min-width: 46px;
+  padding: 0;
+  font-size: 18px;
+}
+.convoy-v {
+  min-width: 34px;
+  text-align: center;
+}
+
 /* ---------- toasts ---------- */
 .toasts.battle-toasts {
   left: 50%;

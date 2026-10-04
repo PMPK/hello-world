@@ -15,6 +15,7 @@ import { statsOf } from '../units/stats';
 import { defenseStatsOf } from '../units/defense';
 import { availableTechs, TECHS } from '../research/research';
 import { reliefEta } from '../campaign/relief';
+import { CONVOY_SPEED, KEEP_AT_HOME, MANUAL_CONVOY_CAPACITY, MANUAL_CONVOY_SEATS, transferProblem } from '../campaign/convoys';
 import { bar, btn, clear, el, fmt, ICONS, iconBtn, signed } from './dom';
 import { openModal, Toasts } from './screens';
 
@@ -47,6 +48,8 @@ export interface CampaignController {
   deployGarrison(baseId: string): void;
   beginPlacement(baseId: string, typeId: BuildingTypeId): void;
   beginBaseFounding(fromBaseId: string): void;
+  /** Dispatch a hand-loaded convoy; returns an error message or null. */
+  sendConvoy(fromId: string, toId: string, cargo: PartialStock, people: number): string | null;
   confirmPlacement(): void;
   cancelPlacement(): void;
   buildOutpost(baseId: string, siteId: string): void;
@@ -850,6 +853,11 @@ export class CampaignHud {
     const fb = btn('Found new base…', () => this.c.beginBaseFounding(b.id), can.ok ? '' : 'disabled');
     fb.dataset.testid = 'found-base';
     actions.append(fb);
+    if (basesOf(s, b.factionId).length > 1) {
+      const sc = btn('Send convoy…', () => this.openConvoy(b));
+      sc.dataset.testid = 'send-convoy';
+      actions.append(sc);
+    }
     body.append(actions);
     body.append(
       el('div', {
@@ -860,6 +868,86 @@ export class CampaignHud {
       }),
     );
     return panel;
+  }
+
+  /** Load a convoy by hand: supplies and colonists for another of our bases. */
+  private openConvoy(from: Base): void {
+    const s = this.c.state;
+    const others = basesOf(s, from.factionId).filter((x) => x.id !== from.id);
+    if (!others.length) return;
+    let to = others.slice().sort((p, q) => p.population - q.population)[0];
+    const cargo: PartialStock = {};
+    let people = 0;
+    const dest = el('div', 'seg convoy-dest');
+    const destBtns = others.map((o) => {
+      const d = btn(`${o.name} · ${Math.round(dist(from.x, from.z, o.x, o.z))} km`, () => {
+        to = o;
+        refresh();
+      }, 'small');
+      d.dataset.testid = `convoy-to-${o.id}`;
+      dest.append(d);
+      return { o, d };
+    });
+    const grid = el('div', 'convoy-grid');
+    const values = new Map<string, HTMLElement>();
+    const row = (key: string, label: string, have: () => number, step: number, get: () => number, set: (v: number) => void): void => {
+      const v = el('span', { class: 'mono convoy-v' });
+      values.set(key, v);
+      const minus = btn('−', () => {
+        set(Math.max(0, get() - step));
+        refresh();
+      }, 'convoy-step');
+      const plus = btn('+', () => {
+        set(Math.min(have(), get() + step));
+        refresh();
+      }, 'convoy-step');
+      minus.dataset.testid = `convoy-minus-${key}`;
+      plus.dataset.testid = `convoy-plus-${key}`;
+      grid.append(el('div', 'convoy-row', el('div', 'convoy-label', el('div', { text: label }), el('div', { class: 'muted mono', text: `have ${fmt(have())}` })), minus, v, plus));
+    };
+    for (const k of STOCK_RESOURCES) {
+      row(k, RESOURCES[k].name, () => Math.floor(from.stock[k]), 10, () => cargo[k] ?? 0, (n) => {
+        cargo[k] = n;
+      });
+    }
+    row('people', 'Colonists', () => Math.max(0, Math.floor(from.population) - KEEP_AT_HOME), 2, () => people, (n) => {
+      people = n;
+    });
+    const info = el('div', 'hint');
+    const problemEl = el('div', 'hint bad');
+    let close: () => void = () => undefined;
+    const go = btn('Dispatch convoy', () => {
+      const err = this.c.sendConvoy(from.id, to.id, cargo, people);
+      if (err) {
+        problemEl.textContent = err;
+        return;
+      }
+      close();
+    }, 'primary');
+    go.dataset.testid = 'convoy-dispatch';
+    const refresh = (): void => {
+      for (const { o, d } of destBtns) d.classList.toggle('active', o === to);
+      let load = 0;
+      for (const k of STOCK_RESOURCES) {
+        values.get(k)!.textContent = `${cargo[k] ?? 0}`;
+        load += cargo[k] ?? 0;
+      }
+      values.get('people')!.textContent = `${people}`;
+      const hours = dist(from.x, from.z, to.x, to.z) / CONVOY_SPEED;
+      const room = to.econ.housing - Math.floor(to.population);
+      info.textContent = `Load ${load} / ${MANUAL_CONVOY_CAPACITY} · colonists ${people} / ${MANUAL_CONVOY_SEATS} · about ${formatDuration(hours)} to ${to.name}${people > room ? ` · only ${Math.max(0, room)} free housing there` : ''}. Convoys can be intercepted.`;
+      const problem = load < 1 && people < 1 ? null : transferProblem(from, to, cargo, people);
+      problemEl.textContent = problem ?? '';
+      go.classList.toggle('disabled', !!problem || (load < 1 && people < 1));
+    };
+    refresh();
+    close = openModal(this.host, {
+      kicker: `Convoy from ${from.name}`,
+      title: 'Send supplies',
+      body: [el('div', { class: 'label', text: 'Destination' }), dest, grid, info, problemEl, el('div', 'actions', go)],
+      actions: [{ label: 'Cancel', onClick: () => undefined }],
+      dismissable: true,
+    });
   }
 
   private openBuildMenu(b: Base): void {

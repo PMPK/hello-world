@@ -46,7 +46,8 @@ STRATEGIC MAP ──► economy / construction / production / army movement (rea
   Vehicle Depot, Research Lab, MG Bunker, AT Gun Emplacement (defences fight on their own in base battles).
 - Units built from modular components (chassis/engine/armour/weapons/sensors): rifle squads, recon jeeps,
   main battle tanks, supply trucks, ATGM teams (research). Continuous production, task force split/merge.
-- Expansion: found new bases (supply convoys keep them stocked); relief landings when an expedition loses every base.
+- Expansion: found new bases (automatic supply convoys keep them stocked, or send supplies and colonists by
+  hand); relief landings when an expedition loses every base.
 - Research: one lab per base, seven tier-1 technologies (economy, logistics, defences, ATGM teams).
 - Tactical battles: line of sight, fog of war, directional armour, cover and concealment, suppression, ammo and fuel,
   reserves, structures that can be damaged/destroyed, field resupply from trucks, unit card and follow camera;

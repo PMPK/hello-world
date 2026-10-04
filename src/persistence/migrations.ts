@@ -34,6 +34,13 @@ export const MIGRATIONS: Record<number, Migration> = {
     for (const [id, f] of Object.entries(factions)) out[id] = { ...f, baselessSince: f.baselessSince ?? null, reliefLandings: f.reliefLandings ?? 0 };
     return { ...s, factions: out, version: 5 };
   },
+  // v6: convoys can carry colonists between bases
+  5: (s) => {
+    const convoys = (s.convoys ?? {}) as Record<string, Record<string, unknown>>;
+    const out: Record<string, Record<string, unknown>> = {};
+    for (const [id, c] of Object.entries(convoys)) out[id] = { ...c, people: c.people ?? 0 };
+    return { ...s, convoys: out, version: 6 };
+  },
 };
 
 export function migrateState(raw: Record<string, unknown>): CampaignState {

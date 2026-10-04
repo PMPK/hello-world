@@ -281,6 +281,23 @@ test('found a new base from the base panel', async ({ page }, info) => {
   expect(n).toBe(2);
   await page.waitForTimeout(800);
   await page.screenshot({ path: `test-results/found-base-${info.project.name}.png` });
+
+  // send ore and colonists to the new base with a hand-loaded convoy
+  await px(page, (p) => {
+    const s = p.state();
+    const home = Object.values(s.bases as Record<string, any>).find((x: any) => x.factionId === s.playerFactionId && x.name.startsWith('Landing'));
+    p.app.campaign.select({ kind: 'base', id: home.id });
+  });
+  await page.getByTestId('send-convoy').click();
+  await page.getByTestId('convoy-plus-minerals').click();
+  await page.getByTestId('convoy-plus-minerals').click();
+  await page.getByTestId('convoy-plus-people').click();
+  await page.getByTestId('convoy-dispatch').click();
+  const convoy = await px(page, (p) => {
+    const c = Object.values(p.state().convoys as Record<string, any>).find((x: any) => x.fromBuildingId.startsWith('manual:'));
+    return c ? { ore: c.cargo.minerals, people: c.people } : null;
+  });
+  expect(convoy).toEqual({ ore: 20, people: 2 });
   expect(errors).toEqual([]);
 });
 

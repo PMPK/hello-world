@@ -4,6 +4,8 @@ import { BUILDINGS, type BuildingTypeId } from '../data/buildings';
 import { FACTION_DEFS } from '../data/factions';
 import { startResearch } from '../research/research';
 import { canFoundFrom, foundBase, MAX_FOUND_RANGE, MIN_BASE_SPACING, validateBaseSite } from '../campaign/expansion';
+import { sendConvoy } from '../campaign/convoys';
+import type { PartialStock } from '../data/resources';
 import { BASE_RADIUS } from '../world/mapgen';
 import { statsOf } from '../units/stats';
 import {
@@ -535,6 +537,15 @@ export class CampaignMode implements Mode, CampaignController {
   }
 
   /** Choose a site for a new base founded from `fromBaseId` (map placement mode). */
+  sendConvoy(fromId: string, toId: string, cargo: PartialStock, people: number): string | null {
+    const r = sendConvoy(this.ctx, fromId, toId, cargo, people);
+    if (!r.ok) return r.reason;
+    this.hud.toast(`Convoy on its way to ${this.state.bases[toId]?.name ?? 'the base'}.`, 'econ');
+    this.app.audio.ui('confirm');
+    this.hud.update(true);
+    return null;
+  }
+
   beginBaseFounding(fromBaseId: string): void {
     const from = this.state.bases[fromBaseId];
     if (!from) return;

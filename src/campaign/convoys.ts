@@ -1,9 +1,9 @@
-import { dist } from '../core/math';
-import { STOCK_RESOURCES, stockTotal, type PartialStock, type StockResourceId } from '../data/resources';
+import { dist, type Vec2 } from '../core/math';
+import { RESOURCES, STOCK_RESOURCES, stockTotal, type PartialStock, type StockResourceId } from '../data/resources';
 import { depositToBase } from '../economy/economy';
 import { log, newId, type SimContext } from './context';
 import { areHostile } from './queries';
-import type { Convoy } from './types';
+import type { Base, Convoy } from './types';
 
 export const CONVOY_SPEED = 12; // map units per hour
 export const CONVOY_LOAD = 15;
@@ -34,6 +34,7 @@ export function stepConvoys(ctx: SimContext, dt: number): void {
       fromBuildingId: b.id,
       toBaseId: base.id,
       cargo,
+      people: 0,
       path: path.slice(1),
       x: b.x,
       z: b.z,
@@ -66,15 +67,22 @@ export function stepConvoys(ctx: SimContext, dt: number): void {
       }
     }
     if (c.path.length === 0 || dist(c.x, c.z, base.x, base.z) < 1) {
-      depositToBase(state, base, c.cargo);
+      const lost = depositToBase(state, base, c.cargo);
+      base.population += c.people;
       delete state.convoys[c.id];
+      if (c.fromBuildingId.startsWith('manual:') && state.factions[c.factionId]?.isPlayer) {
+        const spilled = stockTotal(lost);
+        log(state, `Convoy arrived at ${base.name}${c.people ? ` with ${c.people} colonists` : ''}.${spilled >= 1 ? ` Storage full: ${Math.round(spilled)} units left behind.` : ''}`, 'econ', c.factionId);
+      }
       continue;
     }
     for (const a of Object.values(state.armies)) {
       if (!areHostile(state, a.factionId, c.factionId)) continue;
       if (dist(a.x, a.z, c.x, c.z) < INTERCEPT_RADIUS) {
         delete state.convoys[c.id];
-        if (state.factions[c.factionId]?.isPlayer) log(state, 'A supply convoy was intercepted and destroyed by hostile forces.', 'warn', c.factionId);
+        if (state.factions[c.factionId]?.isPlayer) {
+          log(state, `A supply convoy was intercepted and destroyed by hostile forces.${c.people ? ` ${c.people} colonists were lost.` : ''}`, 'warn', c.factionId);
+        }
         else if (state.factions[a.factionId]?.isPlayer) log(state, `${a.name} intercepted an enemy supply convoy.`, 'battle', a.factionId);
         break;
       }
@@ -127,12 +135,99 @@ function dispatchSupplyConvoys(ctx: SimContext): void {
       fromBuildingId: tag,
       toBaseId: to.id,
       cargo,
+      people: 0,
       path: road.points.slice(1),
       x: from.x,
       z: from.z,
     };
     state.convoys[c.id] = c;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Convoys sent by hand between two bases of the same expedition
+// ---------------------------------------------------------------------------
+
+/** Cargo (stock units) and seats of one hand-sent convoy. */
+export const MANUAL_CONVOY_CAPACITY = 120;
+export const MANUAL_CONVOY_SEATS = 12;
+/** People a base keeps when it sends colonists away. */
+export const KEEP_AT_HOME = 8;
+
+/** Route between two bases: along the road that links them when there is one, otherwise cross-country. */
+export function convoyRoute(ctx: SimContext, from: Base, to: Base): Vec2[] | null {
+  const { state } = ctx;
+  for (const r of Object.values(state.roads)) {
+    const end = state.buildings[r.toBuildingId];
+    if (!end || end.typeId !== 'hq') continue;
+    if (r.fromBaseId === from.id && end.baseId === to.id) return r.points.slice(1);
+    if (r.fromBaseId === to.id && end.baseId === from.id) return r.points.slice().reverse().slice(1);
+  }
+  return ctx.world.findArmyPath({ x: from.x, z: from.z }, { x: to.x, z: to.z });
+}
+
+/** Why this transfer cannot be sent, or null when it can. */
+export function transferProblem(from: Base | undefined, to: Base | undefined, cargo: PartialStock, people: number): string | null {
+  if (!from || !to || from === to) return 'Choose a destination base';
+  if (to.factionId !== from.factionId) return 'Convoys only run between your own bases';
+  let load = 0;
+  for (const k of STOCK_RESOURCES) {
+    const v = cargo[k] ?? 0;
+    if (v < 0) return 'Invalid cargo';
+    if (v > from.stock[k] + 1e-6) return `Not enough ${RESOURCES[k].name.toLowerCase()} in ${from.name}`;
+    load += v;
+  }
+  if (load > MANUAL_CONVOY_CAPACITY + 1e-6) return `A convoy carries at most ${MANUAL_CONVOY_CAPACITY} units`;
+  if (people < 0 || people > MANUAL_CONVOY_SEATS) return `A convoy seats at most ${MANUAL_CONVOY_SEATS} colonists`;
+  if (people > 0 && Math.floor(from.population) - people < KEEP_AT_HOME) return `${from.name} must keep ${KEEP_AT_HOME} people`;
+  if (load < 1 && people < 1) return 'Load something first';
+  return null;
+}
+
+export type ConvoyResult = { ok: true; convoy: Convoy } | { ok: false; reason: string };
+
+/** Send supplies and/or colonists from one base to another (they can be intercepted on the way). */
+export function sendConvoy(ctx: SimContext, fromId: string, toId: string, cargo: PartialStock, people: number): ConvoyResult {
+  const { state } = ctx;
+  const from = state.bases[fromId];
+  const to = state.bases[toId];
+  people = Math.floor(people);
+  const problem = transferProblem(from, to, cargo, people);
+  if (problem) return { ok: false, reason: problem };
+  const path = convoyRoute(ctx, from, to);
+  if (!path) return { ok: false, reason: 'No route between the bases' };
+  const load: PartialStock = {};
+  for (const k of STOCK_RESOURCES) {
+    const v = cargo[k] ?? 0;
+    if (v <= 0) continue;
+    load[k] = v;
+    from.stock[k] -= v;
+  }
+  from.population -= people;
+  const c: Convoy = {
+    id: newId(state, 'c'),
+    factionId: from.factionId,
+    fromBuildingId: `manual:${from.id}`,
+    toBaseId: to.id,
+    cargo: load,
+    people,
+    path,
+    x: from.x,
+    z: from.z,
+  };
+  state.convoys[c.id] = c;
+  return { ok: true, convoy: c };
+}
+
+/** Rough travel time (hours) of a convoy along a route. */
+export function convoyHours(from: Vec2, path: Vec2[]): number {
+  let d = 0;
+  let p = from;
+  for (const q of path) {
+    d += dist(p.x, p.z, q.x, q.z);
+    p = q;
+  }
+  return d / CONVOY_SPEED;
 }
 
 /** Total cargo of the supply convoys currently heading to a base. */

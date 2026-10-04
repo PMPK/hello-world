@@ -157,6 +157,10 @@ still fights.
   components, fuel or ammo that the founding base has spare (one convoy in flight, can be intercepted).
 - The AI founds one extra base once its first is well established (~day 13–20), sited near unclaimed
   resources and away from the player.
+- **Hand-sent convoys** (base panel → *Send convoy…*, with two or more bases): up to 120 units of any
+  stock and 12 colonists (the sending base keeps at least 8 people) travel along the road between the
+  bases, or cross-country, at convoy speed; colonists join the destination's population on arrival
+  (overflowing storage is left behind). Convoys can be intercepted — cargo and colonists are lost.
 - **Relief landings** (`src/campaign/relief.ts`): an expedition that has lost every base gets a relief landing
   from Earth 3 days later (at most twice per campaign): a finished HQ, habitat and agri-dome, 30 colonists,
   starter supplies and two rifle squads, on free ground at least 90 km from hostile bases and forces, near

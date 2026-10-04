@@ -11,7 +11,7 @@ import type { ResearchState } from '../research/research';
  */
 
 /** Bump when the shape of CampaignState changes; add a migration in persistence/migrations.ts. */
-export const STATE_VERSION = 5;
+export const STATE_VERSION = 6;
 
 export interface UnitInstance {
   id: string;
@@ -156,9 +156,12 @@ export interface ResourceSite {
 export interface Convoy {
   id: string;
   factionId: string;
+  /** Extractor id, `base:<id>` for automatic supply runs, or `manual:<id>` for player-sent convoys. */
   fromBuildingId: string;
   toBaseId: string;
   cargo: PartialStock;
+  /** Colonists travelling with the convoy (added to the destination's population on arrival). */
+  people: number;
   path: Vec2[];
   x: number;
   z: number;
