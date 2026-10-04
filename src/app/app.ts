@@ -10,7 +10,7 @@ import { stepIntel } from '../campaign/intel';
 import type { World } from '../world/world';
 import type { BattleResult, BattleSetup } from '../battle/types';
 import { openStore } from '../persistence/kvstore';
-import { exportFileName, SaveManager, slotLabel, type SaveInfo, type SaveSlot } from '../persistence/save';
+import { deserializeSave, exportFileName, SaveManager, slotLabel, type SaveGame, type SaveInfo, type SaveSlot } from '../persistence/save';
 import { loadGameModal, offerFile, saveGameModal } from '../ui/saves';
 import { GameRenderer } from '../rendering/renderer';
 import { Overlay } from '../rendering/overlay';
@@ -283,13 +283,30 @@ export class App {
           void this.saves.delete(slot).then(() => this.showMenu());
         }, true),
       onImport: async (json) => {
+        let save: SaveGame;
         try {
-          const save = await this.saves.importJson(json);
-          this.enterCampaign(save.state, worldForState(save.state));
-          return null;
+          save = deserializeSave(json.trim());
         } catch (err) {
           return err instanceof Error ? err.message : 'Import failed.';
         }
+        const go = async (): Promise<void> => {
+          await this.saves.save(save.state, 'autosave');
+          this.enterCampaign(save.state, worldForState(save.state));
+        };
+        // the import becomes the autosave: never overwrite the player's current autosave without asking
+        if (!saves.some((x) => x.slot === 'autosave')) {
+          await go();
+          return null;
+        }
+        confirmModal(
+          this.ui,
+          'Replace the autosave?',
+          'The imported campaign becomes your autosave (Continue opens it). Your current autosave will be overwritten — to keep it, load it and save it to the manual slot first.',
+          'Import',
+          () => void go(),
+          true,
+        );
+        return null;
       },
     });
   }
@@ -308,7 +325,7 @@ export class App {
   }
 
   /** Pause menu → Save game: pick a slot or export a portable save. */
-  private async openSaveMenu(resume: () => void): Promise<void> {
+  private async openSaveMenu(): Promise<void> {
     const c = this.campaign;
     if (!c) return;
     let saves: SaveInfo[] = [];
@@ -318,7 +335,7 @@ export class App {
       saves = [];
     }
     saveGameModal(this.ui, saves, {
-      onSave: (slot) => void this.save(slot).then(resume),
+      onSave: (slot) => void this.save(slot),
       onExport: () => {
         void offerFile(exportFileName(c.state), this.saves.exportJson(c.state)).then((r) => {
           if (r === 'saved') c.hud.toast('Save file exported.', 'econ');
@@ -373,8 +390,8 @@ export class App {
   openPauseMenu(): void {
     const c = this.campaign;
     if (!c) return;
-    const prev = c.speed;
-    c.setSpeed(0);
+    // the campaign does not advance while any dialog is open, so the menu leaves the speed alone:
+    // closing it (or whatever it opens) carries on at the speed the player had chosen
     openModal(this.ui, {
       kicker: GAME_INFO.title,
       title: 'Command menu',
@@ -383,11 +400,11 @@ export class App {
       ],
       dismissable: false,
       actions: [
-        { label: 'Resume', cls: 'primary', onClick: () => c.setSpeed(prev || 1) },
+        { label: 'Resume', cls: 'primary', onClick: () => undefined },
         {
           label: 'Save game',
           onClick: () => {
-            void this.openSaveMenu(() => c.setSpeed(prev || 1));
+            void this.openSaveMenu();
           },
         },
         { label: 'How to play', onClick: () => howToPlayModal(this.ui, isTouchDevice()) },

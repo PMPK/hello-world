@@ -56,6 +56,12 @@ export const Models = {
   oilSeep: () => get('oilSeep', buildOilSeep),
 };
 
+/** Whether a geometry belongs to the shared model cache (views must not dispose those). */
+export function isCachedGeometry(g: THREE.BufferGeometry): boolean {
+  for (const v of cache.values()) if (v === g) return true;
+  return false;
+}
+
 export function disposeModelCache(): void {
   for (const g of cache.values()) g.dispose();
   cache.clear();

@@ -5,6 +5,7 @@ import { BUILDINGS, type BuildingTypeId } from '../data/buildings';
 import { FACTION_DEFS } from '../data/factions';
 import { statsOf } from '../units/stats';
 import { isVisibleToFaction } from '../campaign/queries';
+import { disposeScene } from './dispose';
 import type { Army, Building, CampaignState } from '../campaign/types';
 import { BIOME, heightAt, type BiomeId, type Terrain } from '../world/terrain';
 import type { World } from '../world/world';
@@ -990,13 +991,8 @@ export class CampaignView {
   }
 
   dispose(): void {
-    this.scene.traverse((o) => {
-      const m = o as THREE.Mesh;
-      if (m.isMesh && m.geometry && !(m instanceof THREE.InstancedMesh)) {
-        // shared model geometries are cached; only dispose unique ones
-        if (m === this.terrainMesh || m === this.water || m === this.roadMesh) m.geometry.dispose();
-      }
-    });
+    // the view's own geometries, materials, instance buffers and the sun's shadow map
+    disposeScene(this.scene);
     this.damagedMat.dispose();
     this.settlements.dispose();
     if (this.siteBeacons) {

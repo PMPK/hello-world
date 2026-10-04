@@ -46,6 +46,8 @@ export class PointerInput {
   private pinchPrev: { d: number; a: number; cx: number; cy: number } | null = null;
   private lastTap = { t: 0, x: 0, y: 0 };
   private hadMulti = false;
+  /** Until then, the browser's click that follows a canvas tap is swallowed if it lands elsewhere. */
+  private swallowUntil = 0;
   enabled = true;
 
   constructor(
@@ -58,6 +60,7 @@ export class PointerInput {
     window.addEventListener('pointercancel', this.cancel);
     el.addEventListener('wheel', this.wheel, { passive: false });
     el.addEventListener('contextmenu', this.ctx);
+    window.addEventListener('click', this.swallowClick, true);
   }
 
   dispose(): void {
@@ -67,6 +70,7 @@ export class PointerInput {
     window.removeEventListener('pointercancel', this.cancel);
     this.el.removeEventListener('wheel', this.wheel);
     this.el.removeEventListener('contextmenu', this.ctx);
+    window.removeEventListener('click', this.swallowClick, true);
     this.clearLong();
   }
 
@@ -193,10 +197,13 @@ export class PointerInput {
       this.claimed = false;
       return;
     }
-    if (this.hadMulti || this.longFired) return;
-    const dtime = performance.now() - t.t0;
-    if (dtime > TAP_TIME) return;
+    if (this.hadMulti) return;
     const now = performance.now();
+    // a tap or long press may open UI right under the finger; the click the browser sends next must not press it
+    this.swallowUntil = now + 450;
+    if (this.longFired) return;
+    const dtime = now - t.t0;
+    if (dtime > TAP_TIME) return;
     if (now - this.lastTap.t < DOUBLE_TAP && Math.hypot(p.x - this.lastTap.x, p.y - this.lastTap.y) < 30) {
       this.lastTap.t = 0;
       this.h.onDoubleTap?.(p.x, p.y, t.info);
@@ -204,6 +211,14 @@ export class PointerInput {
     }
     this.lastTap = { t: now, x: p.x, y: p.y };
     this.h.onTap?.(p.x, p.y, t.info);
+  };
+
+  private swallowClick = (e: MouseEvent): void => {
+    if (performance.now() > this.swallowUntil) return;
+    this.swallowUntil = 0;
+    if (e.target === this.el) return;
+    e.preventDefault();
+    e.stopPropagation();
   };
 
   private cancel = (e: PointerEvent): void => {

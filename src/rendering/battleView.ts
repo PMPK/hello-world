@@ -17,6 +17,7 @@ import { Models } from './models/cache';
 import { buildRing, TANK_TURRET_HEIGHT } from './models/units';
 import { Daylight } from './daylight';
 import { makeLights, type GameRenderer } from './renderer';
+import { disposeScene } from './dispose';
 
 /** Visual exaggeration of units on the battlefield for readability. */
 export const UNIT_VIS_SCALE = { infantry: 1.75, light_vehicle: 1.35, tank: 1.15, support: 1.3 } as const;
@@ -639,5 +640,6 @@ export class BattleView {
   dispose(): void {
     this.effects.dispose();
     this.damagedMat.dispose();
+    disposeScene(this.scene);
   }
 }

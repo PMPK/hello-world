@@ -172,6 +172,8 @@ test('full loop: campaign → move army → tactical battle → back to campaign
   await expect(page.getByTestId('load-manual')).toBeVisible();
   await page.locator('.save-paste').fill(exported);
   await page.getByRole('button', { name: 'Import text' }).click();
+  // an autosave exists: the import asks before replacing it
+  await page.getByRole('button', { name: 'Import', exact: true }).click();
   await expect(page.getByTestId('menu')).toBeVisible();
   expect(await px(page, (p) => p.state().stats.battlesFought)).toBe(1);
 
@@ -457,5 +459,49 @@ test('intel: a sighting alert jumps to the force, which leaves a last known posi
     p.app.campaign.select({ kind: 'base', id: rival.id });
   });
   await expect(page.getByTestId('base-intel')).toContainText('NO REPORT');
+  expect(errors).toEqual([]);
+});
+
+test('the whole map takes touches, and panel buttons act on the building shown', async ({ page }, info) => {
+  const touch = info.project.name.includes('touch');
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto('/');
+  await page.getByTestId('new-campaign').click();
+  await page.getByTestId('intro-skip').click();
+  await expect(page.getByTestId('menu')).toBeVisible();
+  await page.getByTestId('speed-0').click();
+
+  // nothing selected: the empty side-panel area and the gaps of the top bar are see-through
+  const vp = page.viewportSize()!;
+  const hits = await page.evaluate(({ w, h }) => {
+    const at = (x: number, y: number): string => (document.elementFromPoint(x, y) as HTMLElement | null)?.tagName ?? '';
+    return [at(w - 60, h / 2), at(w - 200, h - 40), at(w / 2, h / 2)];
+  }, { w: vp.width, h: vp.height });
+  expect(hits).toEqual(['CANVAS', 'CANVAS', 'CANVAS']);
+  // a drag that starts on the right part of the map pans the camera like anywhere else
+  const cam0 = await px(page, (p) => ({ x: p.app.campaign.view.rig.want.x, z: p.app.campaign.view.rig.want.z }));
+  await page.mouse.move(vp.width - 80, vp.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(vp.width - 200, vp.height / 2 + 30, { steps: 8 });
+  await page.mouse.up();
+  const cam1 = await px(page, (p) => ({ x: p.app.campaign.view.rig.want.x, z: p.app.campaign.view.rig.want.z }));
+  expect(Math.hypot(cam1.x - cam0.x, cam1.z - cam0.z)).toBeGreaterThan(1);
+  void touch;
+
+  // two identical bunkers: the panel's buttons act on the one selected last
+  const ids: string[] = await px(page, (p) => {
+    p.debugFortify(['bunker', 'bunker']);
+    const s = p.state();
+    return Object.values(s.buildings as Record<string, any>).filter((b: any) => b.typeId === 'bunker' && b.factionId === s.playerFactionId).map((b: any) => b.id);
+  });
+  expect(ids.length).toBe(2);
+  await px(page, (p) => p.app.campaign.select(null));
+  await px(page, (p) => p.app.campaign.select({ kind: 'building', id: Object.values(p.state().buildings as Record<string, any>).filter((b: any) => b.typeId === 'bunker')[0].id }));
+  await expect(page.getByTestId('side-panel')).toBeVisible();
+  await px(page, (p) => p.app.campaign.select({ kind: 'building', id: Object.values(p.state().buildings as Record<string, any>).filter((b: any) => b.typeId === 'bunker')[1].id }));
+  await page.getByTestId('side-panel').getByRole('button', { name: 'Disable' }).click();
+  const enabled = await px(page, (p) => Object.values(p.state().buildings as Record<string, any>).filter((b: any) => b.typeId === 'bunker').map((b: any) => b.enabled));
+  expect(enabled).toEqual([true, false]);
   expect(errors).toEqual([]);
 });

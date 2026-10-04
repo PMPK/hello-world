@@ -7,7 +7,7 @@ import { dist } from '../core/math';
 import { ARMY_MAX_UNITS, armyBaseSpeed, armyMen, armySupplies, fuelRange, maxRations, MERGE_RANGE, supplyingBase } from '../campaign/armies';
 import { cancelRefund, canBuildOutpost, canBuildType, canCancel, OUTPOST_RANGE } from '../campaign/construction';
 import { canFoundFrom, FOUND_COLONISTS, FOUND_COST, MAX_FOUND_RANGE, MIN_BASE_SPACING } from '../campaign/expansion';
-import { affordability, designsFor, MAX_QUEUE } from '../campaign/production';
+import { affordability, canQueue, designsFor, MAX_QUEUE } from '../campaign/production';
 import { basesOf, isOutpost, isVisibleToFaction, PLAYER_VISION_RADIUS, relationOf } from '../campaign/queries';
 import { agoText, CLOSE_LOOK, compassPoint, defencesText, observeBase, placeName, plural, SIGHTING_TTL, structureCount, tallyCount, tallyText } from '../campaign/intel';
 import type { Army, ArmySighting, Base, BaseReport, Building, BuildingStatus, CampaignState, LogEntry, PendingBattle, UnitInstance } from '../campaign/types';
@@ -151,6 +151,9 @@ export class CampaignHud {
   private seenLog: LogEntry | null = null;
   private contactClose: (() => void) | null = null;
   private contactFor: string | null = null;
+  /** What the directive's Show button does, and the step it was built for. */
+  private directiveAction: (() => void) | null = null;
+  private directiveStep = -1;
   focusBaseId: string | null = null;
 
   constructor(
@@ -436,30 +439,73 @@ export class CampaignHud {
       Object.values(s.buildings).some((b) => b.factionId === pf && b.typeId === t && b.state !== 'destroyed' && (!kind || (b.siteId && s.sites[b.siteId]?.kind === kind)));
     const units = [...Object.values(s.armies).filter((a) => a.factionId === pf).flatMap((a) => a.units), ...basesOf(s, pf).flatMap((b) => b.garrison)];
     const infantry = units.filter((u) => u.designId === 'rifle_squad').length;
-    const steps: [boolean, string][] = [
-      [has('refinery'), 'Build a Refinery — tap your base, then Build.'],
-      [infantry >= 5, 'Train a Rifle Squad at the Barracks to strengthen the garrison.'],
-      [has('extractor', 'hydrocarbons'), 'Claim a hydrocarbon field (amber diamond) with an Oil Well.'],
-      [has('power_plant'), 'Build a Power Plant before the grid overloads.'],
-      [has('factory'), 'Build an Industrial Factory for components and ammunition.'],
-      [has('vehicle_depot'), 'Build a Vehicle Depot to produce jeeps and tanks.'],
+    const build = (t: BuildingTypeId) => (): void => {
+      const b = this.focusBase();
+      if (b) this.openBuildMenu(b, t);
+    };
+    const open = (t: BuildingTypeId) => (): void => {
+      const b = Object.values(s.buildings).find((x) => x.factionId === pf && x.typeId === t && x.state === 'active');
+      if (b) this.c.select({ kind: 'building', id: b.id }, true);
+      else build(t)();
+    };
+    const steps: [boolean, string, () => void][] = [
+      [has('refinery'), 'Build a Refinery — tap your base, then Build.', build('refinery')],
+      [infantry >= 5, 'Train a Rifle Squad at the Barracks to strengthen the garrison.', open('barracks')],
+      [has('extractor', 'hydrocarbons'), 'Claim a hydrocarbon field (amber diamond) with an Oil Well.', () => this.showFreeSite('hydrocarbons')],
+      [has('power_plant'), 'Build a Power Plant before the grid overloads.', build('power_plant')],
+      [has('factory'), 'Build an Industrial Factory for components and ammunition.', build('factory')],
+      [has('vehicle_depot'), 'Build a Vehicle Depot to produce jeeps and tanks.', build('vehicle_depot')],
       [
         has('research_lab') && !!(s.factions[pf]?.research.current || s.factions[pf]?.research.completed.length),
         'Build a Research Lab and choose a research project in its panel.',
+        open('research_lab'),
       ],
-      [units.filter((u) => u.designId === 'mbt').length >= 2, 'Produce a second Main Battle Tank at the Vehicle Depot.'],
-      [has('bunker') || has('at_emplacement'), 'Fortify: build an MG Bunker or AT Gun on the side facing the rival.'],
-      [basesOf(s, pf).length >= 2, 'Expand: found a second base near unclaimed resources (base panel → Found new base).'],
+      [units.filter((u) => u.designId === 'mbt').length >= 2, 'Produce a second Main Battle Tank at the Vehicle Depot.', open('vehicle_depot')],
+      [has('bunker') || has('at_emplacement'), 'Fortify: build an MG Bunker or AT Gun on the side facing the rival.', build('bunker')],
+      [
+        basesOf(s, pf).length >= 2,
+        'Expand: found a second base near unclaimed resources (base panel → Found new base).',
+        () => {
+          const b = this.focusBase();
+          if (b) this.c.select({ kind: 'base', id: b.id }, true);
+        },
+      ],
     ];
-    const next = steps.find(([done]) => !done);
+    const idx = steps.findIndex(([d]) => !d);
+    const next = idx >= 0 ? steps[idx] : null;
     const done = steps.filter(([d]) => d).length;
     if (!next || this.c.placing || basesOf(s, pf).length === 0) {
       this.directive.style.display = 'none';
       return;
     }
     this.directive.style.display = '';
+    this.directiveAction = next[2];
+    // rebuilt only when the step changes, so a tap on Show never lands on a replaced button
+    if (this.directiveStep === idx) return;
+    this.directiveStep = idx;
     this.directive.textContent = '';
-    this.directive.append(el('span', { class: 'accent mono', text: `DIRECTIVE ${done + 1}/${steps.length}` }), el('span', { text: next[1] }));
+    const show = btn('Show', () => this.directiveAction?.(), 'small act');
+    show.dataset.testid = 'directive-show';
+    this.directive.append(
+      el('div', 'dtext', el('span', { class: 'accent mono', text: `DIRECTIVE ${done + 1}/${steps.length}` }), el('span', { text: next[1] })),
+      show,
+    );
+  }
+
+  /** Focus the nearest unclaimed resource site of a kind within outpost range of one of our bases. */
+  private showFreeSite(kind: string): void {
+    const s = this.c.state;
+    let best: { id: string; d: number } | null = null;
+    for (const site of Object.values(s.sites)) {
+      if (site.kind !== kind) continue;
+      if (site.buildingId && s.buildings[site.buildingId]?.state !== 'destroyed') continue;
+      for (const b of basesOf(s, s.playerFactionId)) {
+        const d = dist(site.x, site.z, b.x, b.z);
+        if (d <= OUTPOST_RANGE && (!best || d < best.d)) best = { id: site.id, d };
+      }
+    }
+    if (best) this.c.select({ kind: 'site', id: best.id }, true);
+    else this.toasts.push('No free field of that kind within reach of your bases — found a base closer to one.', 'warn', 4000);
   }
 
   update(force = false): void {
@@ -677,7 +723,8 @@ export class CampaignHud {
       return;
     }
     const html = panel.innerHTML;
-    if (this.sidePanel && html === this.lastHtml) return;
+    // same markup for another entity (two identical bunkers) still needs the new panel's handlers
+    if (this.sidePanel && this.sidePanel.dataset.key === panel.dataset.key && html === this.lastHtml) return;
     const prevScroll = this.sidePanel?.querySelector('.panel-body')?.scrollTop ?? 0;
     const sameKind = this.sidePanel?.dataset.key === panel.dataset.key;
     this.sidePanel?.remove();
@@ -1209,14 +1256,16 @@ export class CampaignHud {
     });
   }
 
-  private openBuildMenu(b: Base): void {
+  private openBuildMenu(b: Base, highlight?: BuildingTypeId): void {
     const s = this.c.state;
     const grid = el('div', 'build-grid');
     let close: () => void = () => undefined;
+    let marked: HTMLElement | null = null;
     for (const t of BUILDABLE_TYPES) {
       const def = BUILDINGS[t];
       const can = canBuildType(s, b, t);
-      const card = el('div', `build-card${can.ok ? '' : ' disabled'}`);
+      const card = el('div', `build-card${can.ok ? '' : ' disabled'}${t === highlight ? ' pulse' : ''}`);
+      if (t === highlight) marked = card;
       card.dataset.testid = `build-${t}`;
       card.append(
         el('div', { class: 'bn', text: def.name }),
@@ -1240,6 +1289,7 @@ export class CampaignHud {
       grid.append(card);
     }
     close = openModal(this.host, { kicker: b.name, title: 'Construction', body: [grid], actions: [{ label: 'Close', onClick: () => undefined }], dismissable: true });
+    marked?.scrollIntoView({ block: 'nearest' });
   }
 
   private buildingPanel(x: Building): HTMLElement {
@@ -1372,9 +1422,15 @@ export class CampaignHud {
         for (const d of designsFor(x, s)) {
           const stt = statsOf(d);
           const aff = affordability(s, x.id, d);
-          const b = btn('', () => this.c.queueUnit(x.id, d), `${aff.ok ? '' : 'disabled'}`);
+          const can = canQueue(s, x.id, d);
+          // short of people or materials: it can still be queued (work starts when they arrive), say why
+          const b = btn('', () => {
+            this.c.queueUnit(x.id, d);
+            if (can.ok && !aff.ok) this.toast(`${UNIT_DESIGNS[d].name} queued — it starts once the base has enough (${aff.reason.toLowerCase()}).`, 'warn');
+          }, can.ok ? (aff.ok ? '' : 'short') : 'disabled');
           b.style.width = '100%';
           b.style.justifyContent = 'space-between';
+          b.style.flexWrap = 'wrap';
           b.style.marginBottom = '6px';
           b.style.textTransform = 'none';
           b.style.letterSpacing = '0.02em';
@@ -1383,7 +1439,7 @@ export class CampaignHud {
             el('span', { style: { fontWeight: '700' }, text: UNIT_DESIGNS[d].name }),
             el('span', { class: 'mono', style: { fontSize: '11px', opacity: '0.85' }, text: `${stt.crew} ppl · ${costLine(stt.cost)} · ${formatDuration(stt.buildHours)}` }),
           );
-          if (!aff.ok) b.title = aff.reason;
+          if (!aff.ok) b.append(el('span', { class: 'mono warn', style: { fontSize: '11px', width: '100%', textAlign: 'right' }, text: aff.reason }));
           r.append(b);
         }
         const rseg = el('div', 'seg');

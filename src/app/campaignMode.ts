@@ -82,6 +82,7 @@ export class CampaignMode implements Mode, CampaignController {
   private playerBases = -1;
   private autosaveTimer = 0;
   private suspended = false;
+  private disposed = false;
 
   constructor(
     private readonly app: App,
@@ -234,6 +235,7 @@ export class CampaignMode implements Mode, CampaignController {
   }
 
   dispose(): void {
+    this.disposed = true;
     this.input.dispose();
     this.keys();
     this.hud.dispose();
@@ -373,6 +375,12 @@ export class CampaignMode implements Mode, CampaignController {
 
   private onKey(e: KeyboardEvent): void {
     if (this.suspended) return;
+    // with a dialog open, Escape only closes it (if it can be dismissed) and nothing else reacts
+    const modals = this.app.ui.querySelectorAll('.modal-back');
+    if (modals.length) {
+      if (e.code === 'Escape') (modals[modals.length - 1].querySelector('.panel-head button[aria-label="Close"]') as HTMLElement | null)?.click();
+      return;
+    }
     if (e.code === 'Space') {
       e.preventDefault();
       this.setSpeed(this.speed === 0 ? 1 : 0);
@@ -844,6 +852,8 @@ export class CampaignMode implements Mode, CampaignController {
     void autoResolveAsync(setup, this.world.terrain, { onProgress: (f) => progress.set(f) })
       .then((result) => {
         progress.close();
+        // the player left for the main menu meanwhile: this campaign is gone
+        if (this.disposed) return;
         this.finishBattle(setup, result);
       })
       .catch((err) => {

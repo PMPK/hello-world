@@ -317,6 +317,12 @@ export class BattleMode implements Mode, BattleController {
   }
 
   private onKey(e: KeyboardEvent): void {
+    // with a dialog open, Escape only closes it (if it can be dismissed) and no order keys fire
+    const modals = this.app.ui.querySelectorAll('.modal-back');
+    if (modals.length) {
+      if (e.code === 'Escape') (modals[modals.length - 1].querySelector('.panel-head button[aria-label="Close"]') as HTMLElement | null)?.click();
+      return;
+    }
     if (e.code === 'Space') {
       e.preventDefault();
       this.setSpeed(this.speed === 0 ? 1 : 0);

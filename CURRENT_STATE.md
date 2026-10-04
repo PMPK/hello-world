@@ -1,12 +1,14 @@
 # CURRENT STATE
 
 *Last updated: post-MVP iteration 2 (research, garrisons, relief landings, convoys and supply runs, AI patrols,
-living bases, in-game help, ambient music, strategic intel). Schema v10; 116 unit + 16 e2e tests green.*
+living bases, in-game help, ambient music, strategic intel). Schema v10; 116 unit + 18 e2e tests green.*
 
 ## What works
 
 - **Full gameplay loop**: main menu (live 3D map preview) → intro → strategic map → contact report →
   tactical battle *or* auto-resolve → after-action report → results persisted → campaign continues.
+- **First steps**: the DIRECTIVE card has a *Show* button that takes you to the next step (opens the build
+  menu with the structure highlighted, selects the barracks / depot / lab, or the nearest free oil field).
 - **Navigation**: expedition overview (all bases with shortage warnings and all task forces with orders,
   composition and fuel range; tap to jump), next-base / next-task-force buttons, event log; 10-step
   directive tutorial (economy → military → research → fortify → expand).
@@ -103,7 +105,8 @@ living bases, in-game help, ambient music, strategic intel). Schema v10; 116 uni
   (full loop incl. unit card, save/continue, save-slot listing and import; fortified base assault;
   task force split/merge; founding a base and sending it a convoy; research lab project switching;
   tap-to-garrison in a base battle; supply run and auto supply for a task force; standing convoy set up and stopped; intel alert → Show → last known
-  position marker → overview contact; crash dialog after an injected fault).
+  position marker → overview contact; map touches on the right side and panel targeting; crash dialog
+  after an injected fault).
 - **Save schema v10** (Building.repeat in v2, CampaignState.difficulty in v3, research shelf in v4, relief
   landing state per faction in v5, convoy colonists in v6, AI patrol clock in v7, supply-run target in v8,
   per-faction intel in v9, standing convoys and army auto-supply in v10) with migrations from v1.
@@ -132,6 +135,13 @@ living bases, in-game help, ambient music, strategic intel). Schema v10; 116 uni
   construction cancel refunds (now 75% of the materials not yet built in; a base's HQ cannot be cancelled —
   rebuilding a ruin and cancelling, or cancelling a new base's prefab HQ, used to create resources), and
   forces returning to a base that fell walking into it (they now make for another base).
+  UI review (verified in Chromium on the phone profile) fixed: the empty side-panel area and top-bar gaps
+  swallowed map touches (about a third of the screen), a side panel kept the previous building's buttons
+  when two identical structures were selected one after the other, a map tap's follow-up click could press
+  the UI it had just opened (e.g. Auto-resolve in a fresh contact dialog), views leaked GPU memory on every
+  battle and menu trip (shadow maps, geometries, instance buffers), unit buttons short of people or
+  materials could not be tapped and only explained why on hover, the command menu changed the speed on the
+  way out, an import silently replaced the autosave (now asks), and Escape stacked menus behind dialogs.
 - After heavy losses an AI base can stall: too few people to staff its rebuilt structures, so production
   and growth stop for a long time (seen in AI-vs-AI runs). Recovery priorities are a balance task.
 
