@@ -6,9 +6,8 @@ Everything an agent needs is in the repository: [AGENTS.md](AGENTS.md) (rules, c
 
 ## Before starting an agent
 
-- The code must be on GitHub: development happened on `claude/planet-x-mvp-1f1t2m`; `main` is the release
-  branch (every push to `main` deploys to GitHub Pages). Start the agent from `main` once it carries the
-  latest commits.
+- The code is on GitHub: development happened on `claude/planet-x-mvp-1f1t2m`; `main` is the release
+  branch (every push to `main` deploys to GitHub Pages) and carries all of it. Start the agent from `main`.
 - GitHub Pages, one time: *Settings → Pages → Build and deployment → Deploy from a branch → `gh-pages` / (root)*.
 - Agent environment: Node 22 and `npm ci`. Browser tests also need Chromium:
   `npx playwright install --with-deps chromium` (needs internet during setup).
@@ -41,9 +40,9 @@ is in the repo.
 Task for this session: the next item from "Best next tasks" in CURRENT_STATE.md.
 ```
 
-Replace the last line with a concrete task when you have one (for example: "Infantry can garrison
-buildings in tactical battles", "AI recon patrols on the strategic map", "Move the battle simulation
-into a Web Worker").
+Replace the last line with a concrete task when you have one (for example: "Intel: alert me when enemy
+forces come into view and show what an enemy base holds", "Escorts and repeatable supply runs",
+"Infantry can capture enemy buildings in battle", "Move the battle simulation into a Web Worker").
 
 ## Open decision
 

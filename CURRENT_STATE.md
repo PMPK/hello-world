@@ -1,6 +1,7 @@
 # CURRENT STATE
 
-*Last updated: post-MVP iteration (research, ATGM teams, AI contact hunting, base supply reach).*
+*Last updated: post-MVP iteration 2 (research, garrisons, relief landings, convoys and supply runs, AI patrols,
+living bases, in-game help, ambient music). `main` carries everything; schema v8; 97 unit + 14 e2e tests green.*
 
 ## What works
 
@@ -102,9 +103,14 @@
 ## Deployment status
 
 - Code is on GitHub: development branch `claude/planet-x-mvp-1f1t2m`; `main` is fast-forwarded to it after
-  CI passes. Every push to `main` (and the development branch) runs the Pages deploy workflow.
-- GitHub Pages must be switched on once: *Settings → Pages → Source: Deploy from a branch → gh-pages / (root)*
-  — then the game is at https://pmpk.github.io/hello-world/.
+  CI passes. Every push to `main` (and the development branch) runs the Pages deploy workflow, which
+  publishes the build to the `gh-pages` branch.
+- GitHub Pages must be switched on once by the repository owner: *Settings → Pages → Build and deployment →
+  Source: Deploy from a branch → `gh-pages` / (root)* — then the game is at https://pmpk.github.io/hello-world/
+  (if that URL returns 404, this setting is still missing; a GitHub-side "pages build and deployment" run
+  appears under Actions once it is on).
+- Always-available alternative: the single-file build published as a claude.ai Artifact
+  (https://claude.ai/artifact/7qGUMq5vWjnaNKRHEyempW); `npm run build:artifact` rebuilds it.
 - Handoff for other agents (Codex): [AGENTS.md](AGENTS.md) and [HANDOFF.md](HANDOFF.md).
 
 ## Known issues / limitations
@@ -137,13 +143,18 @@ is listed per day), `npm run sim:battle` (`ONLY=<label>` filters matrix lines), 
 
 ## Best next tasks
 
-1. Logistics depth: escorts for convoys and supply runs; standing supply orders (repeat a run).
-2. Defences: let the player see/attack enemy positions from the campaign map (intel), and garrison
-   infantry inside bunkers.
-3. Infantry capturing enemy structures in battle; garrisoning bunkers (extra crew).
-4. AI escorts for its own convoys; player-visible intel reports from patrol contacts.
-5. Base specialisation; standing transfer orders (repeat a convoy) and convoy escorts.
-6. Battle simulation in a Web Worker; spatial hash for targeting.
-7. Audio polish: distant battle rumble on the campaign map, per-faction radio voices, more musical variety.
-8. Guided first-hour scenario on top of the directive system (`CampaignHud.updateDirective`) and the
-   battle tips card (`src/ui/help.ts`).
+1. **Intel**: alerts when enemy forces come into view (log + toast + jump-to), and an enemy-base report
+   (defences, garrison, structures) while it is in sight. Hooks: the enemy army panel ("Observed strength")
+   and enemy base panel ("Intelligence") in `src/ui/campaignHud.ts`; the HUD tick in
+   `src/app/campaignMode.ts` (`watchReliefLanding` shows the pattern); visibility via `isVisibleToFaction` in
+   `src/campaign/queries.ts`.
+2. **Logistics depth**: escorts for convoys and supply runs; standing orders (repeat a convoy or supply run);
+   AI escorts for its own convoys.
+3. **Battle**: infantry capturing enemy structures; infantry garrisoning bunkers (extra crew); garrisoned
+   squads firing from the building edge instead of its centre.
+4. **Base specialisation** (e.g. mining town, fortress, depot) on top of the existing per-base economy.
+5. **Performance**: battle simulation in a Web Worker; spatial hash for targeting; profile on a real phone.
+6. **Audio polish**: distant battle rumble on the campaign map, per-faction radio voices, more musical variety
+   (`src/audio/music.ts`).
+7. **Guided first hour** on top of the directive system (`CampaignHud.updateDirective`) and the battle tips
+   card (`src/ui/help.ts`).

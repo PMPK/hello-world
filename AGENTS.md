@@ -77,10 +77,10 @@ Write long headless output to a file (`> out.txt`); piped `npx` output is buffer
 | Derived unit / defence stats | `src/units/stats.ts`, `src/units/defense.ts` |
 | Terrain, map generation, pathfinding, navigation | `src/world/` |
 | Saves (IndexedDB → localStorage → memory), envelope, migrations | `src/persistence/` |
-| Rendering (Three.js scenes, models, effects, daylight, water, overlay symbols) | `src/rendering/` |
+| Rendering (Three.js scenes, models, effects, daylight, water, settlements, overlay symbols) | `src/rendering/` |
 | Input (pointer gestures, keyboard, RTS camera) | `src/input/` |
 | DOM UI (HUDs, menus, modals, saves, minimap, styles) | `src/ui/` |
-| Procedural audio | `src/audio/audio.ts` |
+| Procedural audio (sound effects, ambience) and generated music | `src/audio/audio.ts`, `src/audio/music.ts` |
 | Unit tests (Vitest) / browser smoke tests (Playwright) | `tests/`, `e2e/smoke.spec.ts` |
 | Dev scripts (headless sims, icons, artifact build) | `scripts/` |
 | CI + GitHub Pages deploy | `.github/workflows/ci.yml`, `.github/workflows/deploy.yml` |
