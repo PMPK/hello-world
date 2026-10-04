@@ -21,6 +21,11 @@ const THINK_INTERVAL = 1.0;
 const PROBE_AFTER = 12;
 /** A remembered position is written off once one of our units stands this close to it and sees nothing. */
 const CHECKED_RADIUS = 30;
+/** Seconds without any contact after which a side that is not clearly stronger gives up the search. */
+const LOST_TRAIL = 300;
+/** Seconds without a single shot (after the fighting began / from the start) that count as a stalled fight. */
+const QUIET_LIMIT = 150;
+const QUIET_START = 420;
 
 function isActive(u: BUnit): boolean {
   return u.alive && !u.retreated && !u.reserve;
@@ -117,7 +122,10 @@ export class TacticalAI {
     // ---- Withdraw when the fight is clearly lost --------------------------
     const fighters = own.filter((u) => u.stats.weapons.length > 0);
     const allDry = fighters.every((u) => u.ammo < Math.min(...u.stats.weapons.map((w) => w.ammoPerShot)));
-    if (!this.retreating && ((ownPower < start * 0.3 && ownPower < this.enemyEstimate * 0.6) || allDry)) {
+    // a siege defender holds its base; anyone else leaves a fight it cannot win or find
+    const holdsBase = sim.setup.kind !== 'field' && this.side === 1;
+    const stalled = !holdsBase && (this.helpless(fighters) || this.lostTrail(ownPower) || this.stuck(ownPower));
+    if (!this.retreating && ((ownPower < start * 0.3 && ownPower < this.enemyEstimate * 0.6) || allDry || stalled)) {
       this.retreating = true;
     }
     if (this.retreating) {
@@ -139,6 +147,48 @@ export class TacticalAI {
     if (this.mode === 'attack') this.planAttack(fighters, ownPower);
     else this.planDefense(fighters);
     this.supportFollow(own.filter((u) => u.stats.weapons.length === 0), fighters);
+  }
+
+  /**
+   * Nothing we still carry can hurt what stands in our way (e.g. missiles
+   * spent and only rifles left against a bunker that cannot see us either):
+   * staying only stalls the battle.
+   */
+  private helpless(fighters: BUnit[]): boolean {
+    const sim = this.sim;
+    const targets: TargetRef[] = [];
+    for (const e of sim.units) if (e.side !== this.side && isActive(e)) targets.push({ kind: 'unit', id: e.id });
+    for (const b of sim.buildings) if (b.side !== this.side && isArmed(b)) targets.push({ kind: 'building', id: b.id });
+    if (!targets.length) return false;
+    return !fighters.some((u) => targets.some((t) => sim.canStillHurt(u, t)));
+  }
+
+  /**
+   * Contact lost for minutes in a fight with no enemy positions to take, and
+   * not the stronger side: the enemy has slipped away, call it a day.
+   */
+  private lostTrail(ownPower: number): boolean {
+    const sim = this.sim;
+    if (this.lastContact < 0 || this.enemyEstimate <= 0 || sim.time - this.lastContact < LOST_TRAIL) return false;
+    if (sim.buildings.some((b) => b.side !== this.side && isArmed(b))) return false;
+    return ownPower <= this.enemyEstimate * 1.1;
+  }
+
+  /**
+   * Nobody has fired for minutes: a siege attacker facing positions it cannot
+   * get at (or hopeless odds) gives up, and in the field the side that is not
+   * stronger leaves.
+   */
+  private stuck(ownPower: number): boolean {
+    const sim = this.sim;
+    let last = -1;
+    for (const u of sim.units) if (u.lastFired > last) last = u.lastFired;
+    for (const b of sim.buildings) if (b.defense && b.defense.lastFired > last) last = b.defense.lastFired;
+    const quiet = last < 0 ? sim.time > QUIET_START : sim.time - last > QUIET_LIMIT;
+    if (!quiet) return false;
+    if (this.siegeAttacker && sim.buildings.some((b) => b.side !== this.side && isArmed(b))) return true;
+    // hopeless odds or an even match that has gone nowhere
+    return this.enemyEstimate > 0 && ownPower <= this.enemyEstimate * (this.siegeAttacker ? 0.5 : 1.1);
   }
 
   /** Supply trucks trail the fighting force (or stay in the base) out of the line of fire. */

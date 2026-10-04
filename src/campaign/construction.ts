@@ -206,13 +206,24 @@ export function removeBuilding(state: CampaignState, id: string): void {
   delete state.buildings[id];
 }
 
-/** Cancel a construction site, refunding 75% of the cost. */
+/** Share of a structure's cost that cancelling its construction returns (materials not yet built in). */
+export function cancelRefund(b: Building): number {
+  return 0.75 * Math.max(0, 1 - b.buildProgress);
+}
+
+/** Whether a construction site may be cancelled (a base's command post may not). */
+export function canCancel(b: Building): boolean {
+  return b.state === 'construction' && b.typeId !== 'hq';
+}
+
+/** Cancel a construction site, refunding 75% of the materials not yet built in. */
 export function cancelConstruction(ctx: SimContext, buildingId: string): boolean {
   const { state, world } = ctx;
   const b = state.buildings[buildingId];
-  if (!b || b.state !== 'construction') return false;
+  if (!b || !canCancel(b)) return false;
   const base = state.bases[b.baseId];
-  if (base) addToStock(base.stock, BUILDINGS[b.typeId].cost, 0.75);
+  // refunds follow the work left: a rebuilt ruin (paid at a discount, started at 25%) returns less than it cost
+  if (base) addToStock(base.stock, BUILDINGS[b.typeId].cost, cancelRefund(b));
   removeBuilding(state, buildingId);
   world.rebuildRoads(Object.values(state.roads));
   return true;

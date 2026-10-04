@@ -446,6 +446,14 @@ export function stepArmies(ctx: SimContext, dt: number): void {
     } else if (o.type === 'attack_building') {
       const b = state.buildings[o.targetId];
       if (!b || b.factionId === army.factionId || b.state === 'destroyed') stopArmy(army);
+    } else if (o.type === 'return' && state.bases[o.baseId]?.factionId !== army.factionId) {
+      // the base it was heading home to has fallen: make for another one rather than walk into it
+      const lost = state.bases[o.baseId]?.name ?? 'Home';
+      if (!orderReturn(ctx, army.id)) stopArmy(army);
+      if (state.factions[army.factionId]?.isPlayer) {
+        const next = army.order.type === 'return' ? state.bases[army.order.baseId] : undefined;
+        log(state, `${army.name}: ${lost} has fallen — ${next ? `making for ${next.name} instead` : 'holding position'}.`, 'warn', army.factionId);
+      }
     }
 
     // --- movement ---

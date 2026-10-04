@@ -1,7 +1,7 @@
 # CURRENT STATE
 
 *Last updated: post-MVP iteration 2 (research, garrisons, relief landings, convoys and supply runs, AI patrols,
-living bases, in-game help, ambient music, strategic intel). Schema v9; 104 unit + 16 e2e tests green.*
+living bases, in-game help, ambient music, strategic intel). Schema v9; 110 unit + 16 e2e tests green.*
 
 ## What works
 
@@ -95,7 +95,7 @@ living bases, in-game help, ambient music, strategic intel). Schema v9; 104 unit
   manual (campaign + battle).
 - **Crash guard**: a single failing frame is skipped; 30 in a row stop the game with a "The simulation
   stopped" dialog (error text, Reload / Main menu) instead of a silent freeze. Saves are untouched.
-- **Tests**: 104 Vitest unit tests; Playwright smoke tests on phone-landscape touch and desktop mouse profiles
+- **Tests**: 110 Vitest unit tests; Playwright smoke tests on phone-landscape touch and desktop mouse profiles
   (full loop incl. unit card, save/continue, save-slot listing and import; fortified base assault;
   task force split/merge; founding a base and sending it a convoy; research lab project switching;
   tap-to-garrison in a base battle; supply run to a task force; intel alert → Show → last known
@@ -120,6 +120,16 @@ living bases, in-game help, ambient music, strategic intel). Schema v9; 104 unit
 - Handoff for other agents (Codex): [AGENTS.md](AGENTS.md) and [HANDOFF.md](HANDOFF.md).
 
 ## Known issues / limitations
+
+- Bug hunt (Oct 2026, scripted invariant runs over 300 seeded AI-vs-AI battles and long headless campaigns)
+  fixed: battle stalemates (units kept attack orders they could no longer back with damage; attackers with
+  nothing left to hurt the defences, or facing hopeless odds, now withdraw instead of waiting out the 15-min
+  clock: 16 → 1 timeouts per 300 battles), dry vehicles ordered to fall back never being abandoned,
+  construction cancel refunds (now 75% of the materials not yet built in; a base's HQ cannot be cancelled —
+  rebuilding a ruin and cancelling, or cancelling a new base's prefab HQ, used to create resources), and
+  forces returning to a base that fell walking into it (they now make for another base).
+- After heavy losses an AI base can stall: too few people to staff its rebuilt structures, so production
+  and growth stop for a long time (seen in AI-vs-AI runs). Recovery priorities are a balance task.
 
 - Away from bases, task forces resupply from their own trucks or from supply runs sent by a base; the army
   panel shows fuel range and truck cargo; the map flags LOW FUEL / LOW AMMO.

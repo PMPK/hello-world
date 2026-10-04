@@ -769,7 +769,8 @@ export class BattleSim {
       return;
     }
     if (o.type === 'attack') {
-      if (!this.targetValid(u, o.target)) {
+      // gone, or nothing left to hurt it with (e.g. missiles spent, only rifles against a bunker)
+      if (!this.targetValid(u, o.target) || !this.canStillHurt(u, o.target)) {
         u.order = { type: 'idle' };
         u.path = [];
         u.target = null;
@@ -807,14 +808,15 @@ export class BattleSim {
         u.path = [];
         return;
       }
+      if (u.stats.fuelCapacity > 0 && u.fuel <= 0) {
+        // immobilised vehicles are abandoned; the crew slips away
+        // (checked before planning: a dry vehicle drops every path it is given)
+        this.damageUnit(u, u.hp + 1, null);
+        return;
+      }
       if (u.path.length === 0) {
         this.planPath(u, exit.x, exit.z);
-        if (u.path.length === 0 && u.stats.fuelCapacity > 0 && u.fuel <= 0) {
-          // immobilised vehicles are abandoned; the crew slips away
-          this.damageUnit(u, u.hp + 1, null);
-        } else if (u.path.length === 0) {
-          u.retreated = true;
-        }
+        if (u.path.length === 0) u.retreated = true;
       }
     }
   }
@@ -842,6 +844,11 @@ export class BattleSim {
     }
     const e = this.unitById(t.id);
     return !!e && canHurtUnit(w, e);
+  }
+
+  /** Whether u still has a weapon, with the ammunition to fire it, that can hurt the target. */
+  canStillHurt(u: BUnit, t: TargetRef): boolean {
+    return u.stats.weapons.some((w) => u.ammo >= w.ammoPerShot && this.weaponCanEngage(u, w, t));
   }
 
   /** Longest range at which any of u's weapons can hurt unit e (0 if none can). */

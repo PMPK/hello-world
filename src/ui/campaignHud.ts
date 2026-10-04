@@ -5,7 +5,7 @@ import { UNIT_DESIGNS } from '../data/unitDesigns';
 import { campaignDay, formatCampaignTime, formatDuration, type SpeedSetting } from '../core/time';
 import { dist } from '../core/math';
 import { ARMY_MAX_UNITS, armyBaseSpeed, armyMen, armySupplies, fuelRange, maxRations, MERGE_RANGE, supplyingBase } from '../campaign/armies';
-import { canBuildOutpost, canBuildType, OUTPOST_RANGE } from '../campaign/construction';
+import { cancelRefund, canBuildOutpost, canBuildType, canCancel, OUTPOST_RANGE } from '../campaign/construction';
 import { canFoundFrom, FOUND_COLONISTS, FOUND_COST, MAX_FOUND_RANGE, MIN_BASE_SPACING } from '../campaign/expansion';
 import { affordability, designsFor, MAX_QUEUE } from '../campaign/production';
 import { basesOf, isOutpost, isVisibleToFaction, PLAYER_VISION_RADIUS, relationOf } from '../campaign/queries';
@@ -1222,7 +1222,7 @@ export class CampaignHud {
       const p = this.section(body, 'Construction');
       p.append(bar(x.buildProgress, 'ok'));
       p.append(el('div', { class: 'hint', text: `${Math.round(x.buildProgress * 100)}% · ${formatDuration(def.buildHours * (1 - x.buildProgress))} remaining at full staffing` }));
-      actions.append(btn('Cancel (75% refund)', () => this.c.cancelConstruction(x.id), 'danger'));
+      if (canCancel(x)) actions.append(btn(`Cancel (${Math.round(cancelRefund(x) * 100)}% refund)`, () => this.c.cancelConstruction(x.id), 'danger'));
     } else if (x.state === 'destroyed') {
       actions.append(btn(`Rebuild (${costLine(def.cost, REBUILD_COST_FACTOR)})`, () => this.c.rebuild(x.id), 'primary'));
     } else {

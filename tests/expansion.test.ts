@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import { orderReturn, stepArmies } from '../src/campaign/armies';
+import { cancelConstruction, cancelRefund, canCancel, rebuildBuilding, startConstruction, suggestPlacement } from '../src/campaign/construction';
+import { declareHostile } from '../src/campaign/diplomacy';
 import { canFoundFrom, FOUND_COLONISTS, foundBase, HQ_PREFAB_PROGRESS, MIN_BASE_SPACING, validateBaseSite } from '../src/campaign/expansion';
+import { captureBase } from '../src/battle/result';
+import { BUILDINGS } from '../src/data/buildings';
 import { worldForState } from '../src/campaign/newCampaign';
-import { basesOf, buildingsOfBase } from '../src/campaign/queries';
+import { armiesOf, basesOf, buildingsOfBase } from '../src/campaign/queries';
 import { advanceCampaign } from '../src/campaign/sim';
 import { housingOf, storageCapacity } from '../src/economy/economy';
 import { deserializeSave, serializeSave } from '../src/persistence/save';
@@ -99,4 +104,63 @@ describe('founding new bases', () => {
     expect(Array.from(w.terrain.heights)).toEqual(Array.from(c.world.terrain.heights));
     expect(Array.from(w.terrain.biomes)).toEqual(Array.from(c.world.terrain.biomes));
   });
+
+  it('the prefab command post of a new base cannot be cancelled for a refund', () => {
+    const c = richCampaign();
+    const site = findSite(c);
+    const r = foundBase(c, c.pBase.id, site.x, site.z);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const hq = buildingsOfBase(c.state, r.base.id).find((x) => x.typeId === 'hq')!;
+    const stock0 = { ...r.base.stock };
+    expect(canCancel(hq)).toBe(false);
+    expect(cancelConstruction(c, hq.id)).toBe(false);
+    expect(c.state.buildings[hq.id]).toBeDefined();
+    expect(r.base.stock).toEqual(stock0);
+  });
+
+  it('a force heading home to a base that fell makes for another base instead of assaulting it', () => {
+    const c = richCampaign();
+    const site = findSite(c);
+    const r = foundBase(c, c.pBase.id, site.x, site.z);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const army = armiesOf(c.state, c.player)[0];
+    army.homeBaseId = r.base.id;
+    expect(orderReturn(c, army.id)).toBe(true);
+    expect(army.order).toEqual({ type: 'return', baseId: r.base.id });
+    declareHostile(c, c.enemy, c.player);
+    captureBase(c, r.base, c.enemy);
+    stepArmies(c, 0.1);
+    expect(army.order).toEqual({ type: 'return', baseId: c.pBase.id });
+    expect(army.homeBaseId).toBe(c.pBase.id);
+    expect(c.state.log.some((l) => l.text.startsWith(`${army.name}: ${r.base.name} has fallen`))).toBe(true);
+  });
 });
+
+describe('construction refunds', () => {
+  it('cancelling returns 75% of the materials not yet built in, never more than a rebuild cost', () => {
+    const c = richCampaign();
+    const def = BUILDINGS.barracks;
+    const spot = suggestPlacement(c.state, c.world, c.pBase, 'barracks', c.pBase.x + 6, c.pBase.z + 6)!;
+    const started = startConstruction(c, c.pBase.id, 'barracks', spot.x, spot.z);
+    expect(started.ok).toBe(true);
+    if (!started.ok) return;
+    const b = started.building;
+    expect(cancelRefund(b)).toBeCloseTo(0.75, 6);
+    b.buildProgress = 0.4;
+    const min0 = c.pBase.stock.minerals;
+    expect(cancelConstruction(c, b.id)).toBe(true);
+    expect(c.pBase.stock.minerals - min0).toBeCloseTo((def.cost.minerals ?? 0) * 0.75 * 0.6, 6);
+
+    // a ruin rebuilt at a discount and cancelled at once must not make a profit
+    const ruin = Object.values(c.state.buildings).find((x) => x.baseId === c.pBase.id && x.typeId === 'barracks')!;
+    ruin.state = 'destroyed';
+    ruin.hp = 0;
+    const before = { ...c.pBase.stock };
+    expect(rebuildBuilding(c, ruin.id).ok).toBe(true);
+    expect(cancelConstruction(c, ruin.id)).toBe(true);
+    for (const k of ['minerals', 'refined', 'components'] as const) expect(c.pBase.stock[k]).toBeLessThanOrEqual(before[k] + 1e-9);
+  });
+});
+

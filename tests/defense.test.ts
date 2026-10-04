@@ -139,4 +139,57 @@ describe('defensive structures', () => {
     );
     expect(forts.length).toBeGreaterThan(0);
   });
+
+  it('an attack order is dropped once nothing left can hurt the target', () => {
+    const c = freshCampaign();
+    const bunker = addDefense(c, 'bunker', 6, 0);
+    c.pBase.stock.ammo = 100;
+    const p = infantryAssault(c, 0);
+    const team = createUnit(c.state, 'atgm_team');
+    team.ammo = 1; // a rifle magazine, not enough for a missile
+    c.state.armies[p.attackerArmyIds[0]].units.push(team);
+    const setup = createBattleSetup(c.state, c.world, p);
+    const sim = new BattleSim(setup, c.world.terrain, { aiSides: [] });
+    const u = sim.units.find((x) => x.side === 0)!;
+    const b = sim.buildings.find((x) => x.spec.campaignId === bunker.id)!;
+    expect(sim.canStillHurt(u, { kind: 'building', id: b.id })).toBe(false);
+    sim.orderAttack([u.id], { kind: 'building', id: b.id });
+    sim.step(0.5);
+    expect(u.order.type).toBe('idle');
+  });
+
+  it('attackers that cannot hurt the defences pull out instead of waiting out the clock', () => {
+    const c = freshCampaign();
+    addDefense(c, 'bunker', 6, 0);
+    c.pBase.stock.ammo = 100;
+    const p = infantryAssault(c, 0);
+    for (let i = 0; i < 2; i++) {
+      const team = createUnit(c.state, 'atgm_team');
+      team.ammo = 1;
+      c.state.armies[p.attackerArmyIds[0]].units.push(team);
+    }
+    const setup = createBattleSetup(c.state, c.world, p);
+    const sim = new BattleSim(setup, c.world.terrain, { aiSides: [0, 1] });
+    for (let i = 0; i < 4000 && !sim.finished; i++) sim.step(0.25);
+    expect(sim.finished).toBe(true);
+    const r = sim.computeResult();
+    expect(r.reason).not.toBe('timeout');
+    expect(r.winner).toBe(1);
+    expect(r.durationSeconds).toBeLessThan(setup.timeLimit / 2);
+  });
+
+  it('a vehicle out of fuel that is ordered to fall back is abandoned', () => {
+    const c = freshCampaign();
+    const p = infantryAssault(c, 1);
+    const tank = createUnit(c.state, 'mbt');
+    tank.fuel = 0;
+    c.state.armies[p.attackerArmyIds[0]].units.push(tank);
+    const setup = createBattleSetup(c.state, c.world, p);
+    const sim = new BattleSim(setup, c.world.terrain, { aiSides: [] });
+    const u = sim.units.find((x) => x.spec.designId === 'mbt')!;
+    sim.orderRetreat([u.id]);
+    for (let i = 0; i < 8; i++) sim.step(0.25);
+    expect(u.alive).toBe(false);
+  });
 });
+

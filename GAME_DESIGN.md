@@ -131,7 +131,8 @@ Rules:
 | AT Gun Emplacement | 25 ORE · 35 ALY · 12 CMP | 20h | 4 crew | 1300 | 0 | 90 mm AT gun (285 m, vehicles only), 16 rds, hard to hit, crew exposed |
 | Research Lab | 60 ORE · 50 ALY · 20 CMP | 30h | 5 | 900 | −6 MW | 1 RP/h at full staffing and power; one per base (see 4.9) |
 
-Construction pays the full cost up front; cancelling refunds 75%. Destroyed buildings stay as ruins and
+Construction pays the full cost up front; cancelling refunds 75% of the materials not yet built in
+(75% × the share of work left; a base's HQ cannot be cancelled). Destroyed buildings stay as ruins and
 can be rebuilt for 60% of the cost. Buildings below 50% HP work at reduced efficiency; *Repair* consumes
 alloys over time. The refinery and factory can be set to *Auto* or a fixed recipe.
 
@@ -291,7 +292,11 @@ tanks seek high ground at stand-off range and back away from infantry that could
 infantry advance through cover and ambush vehicles; a flanking group swings around known enemy
 concentrations; focus fire on the most dangerous / most damaged targets it can hurt; damaged and dry
 units fall back; holds and waits when outmatched; withdraws when the fight is lost (it remembers how strong
-the enemy was, so a beaten remnant still pulls out after losing sight of it). When contact is lost it hunts:
+the enemy was, so a beaten remnant still pulls out after losing sight of it), when nothing it still carries
+can hurt what is left (e.g. missiles spent against a bunker), when contact has been lost for 5 minutes and
+it is not the stronger side, or when nobody has fired for 2½ minutes (a siege attacker facing armed
+positions or hopeless odds; in the field the side that is not stronger) — siege defenders never leave their
+base. An attack order is dropped once the unit has nothing left that can hurt the target. When contact is lost it hunts:
 units close in on last-known positions (a spot reached with nothing in sight is written off), then sweep
 the enemy's half of the field and its rear, where damaged vehicles limp to. Missile teams hold in cover at
 ~85% of missile range from enemy armour and fight as riflemen when only infantry is around. Siege defenders hold
