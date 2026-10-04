@@ -15,7 +15,7 @@ import { buildRing, TANK_TURRET_HEIGHT } from './models/units';
 import { makeLights, type GameRenderer } from './renderer';
 
 /** Visual exaggeration of units on the battlefield for readability. */
-export const UNIT_VIS_SCALE = { infantry: 1.75, light_vehicle: 1.35, tank: 1.15 } as const;
+export const UNIT_VIS_SCALE = { infantry: 1.75, light_vehicle: 1.35, tank: 1.15, support: 1.3 } as const;
 
 const WRECK = new THREE.Color(0.24, 0.22, 0.2);
 const WHITE = new THREE.Color(1, 1, 1);
@@ -25,6 +25,7 @@ interface SideMeshes {
   jeeps: THREE.InstancedMesh;
   hulls: THREE.InstancedMesh;
   turrets: THREE.InstancedMesh;
+  trucks: THREE.InstancedMesh;
 }
 
 export type BattlePick = { kind: 'unit'; id: number } | { kind: 'building'; id: number } | { kind: 'ground'; x: number; z: number };
@@ -81,11 +82,12 @@ export class BattleView {
     this.scene.add(this.effects.group);
 
     const counts = [0, 1].map((s) => {
-      const c = { inf: 0, jeep: 0, tank: 0 };
+      const c = { inf: 0, jeep: 0, tank: 0, truck: 0 };
       for (const u of sim.units) {
         if (u.side !== s) continue;
         if (u.stats.family === 'infantry') c.inf++;
         else if (u.stats.family === 'light_vehicle') c.jeep++;
+        else if (u.stats.family === 'support') c.truck++;
         else c.tank++;
       }
       return c;
@@ -110,6 +112,7 @@ export class BattleView {
         jeeps: mk(Models.jeep(tint), counts[s].jeep),
         hulls: mk(Models.tankHull(tint), counts[s].tank),
         turrets: mk(Models.tankTurret(tint), counts[s].tank),
+        trucks: mk(Models.truck(tint), counts[s].truck),
       };
     }) as [SideMeshes, SideMeshes];
 
@@ -369,8 +372,8 @@ export class BattleView {
   private syncUnits(): void {
     const sim = this.sim;
     const n = [
-      { s: 0, j: 0, h: 0 },
-      { s: 0, j: 0, h: 0 },
+      { s: 0, j: 0, h: 0, t: 0 },
+      { s: 0, j: 0, h: 0, t: 0 },
     ];
     let rings = 0;
     for (const u of sim.units) {
@@ -404,6 +407,16 @@ export class BattleView {
           meshes.soldiers.setColorAt(cnt.s, WHITE);
           cnt.s++;
         }
+      } else if (fam === 'support') {
+        const sc = UNIT_VIS_SCALE.support;
+        this.te.set(0, u.heading, u.alive ? 0 : 0.2, 'YXZ');
+        this.tq.setFromEuler(this.te);
+        this.ts.set(sc, sc, sc);
+        this.tp.set(u.x, y, u.z);
+        this.tm.compose(this.tp, this.tq, this.ts);
+        meshes.trucks.setMatrixAt(cnt.t, this.tm);
+        meshes.trucks.setColorAt(cnt.t, u.alive ? WHITE : WRECK);
+        cnt.t++;
       } else if (fam === 'light_vehicle') {
         const sc = UNIT_VIS_SCALE.light_vehicle;
         this.te.set(0, u.heading, u.alive ? 0 : 0.25, 'YXZ');
@@ -446,7 +459,8 @@ export class BattleView {
       m.jeeps.count = n[s].j;
       m.hulls.count = n[s].h;
       m.turrets.count = n[s].h;
-      for (const im of [m.soldiers, m.jeeps, m.hulls, m.turrets]) {
+      m.trucks.count = n[s].t;
+      for (const im of [m.soldiers, m.jeeps, m.hulls, m.turrets, m.trucks]) {
         im.instanceMatrix.needsUpdate = true;
         if (im.instanceColor) im.instanceColor.needsUpdate = true;
       }

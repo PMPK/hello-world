@@ -38,8 +38,9 @@ describe('armies', () => {
   it('moves continuously toward its destination over campaign time and burns fuel', () => {
     const c = freshCampaign();
     const army = armiesOf(c.state, c.player)[0];
-    const tank = army.units.find((u) => u.designId === 'mbt')!;
-    const fuel0 = tank.fuel;
+    // supply trucks keep the tank topped up, so measure the task force's total fuel
+    const totalFuel = (): number => army.units.reduce((a, u) => a + u.fuel, 0);
+    const fuel0 = totalFuel();
     const start = { x: army.x, z: army.z };
     // pick a reachable target ~25 units away
     let target = { x: army.x + 25, z: army.z };
@@ -57,7 +58,7 @@ describe('armies', () => {
     advanceCampaign(c, 30);
     expect(dist(army.x, army.z, target.x, target.z)).toBeLessThan(1);
     expect(army.order.type).toBe('idle');
-    expect(tank.fuel).toBeLessThan(fuel0);
+    expect(totalFuel()).toBeLessThan(fuel0);
   });
 
   it('forms an army from the garrison and returns units to it', () => {

@@ -461,13 +461,15 @@ export class CampaignView {
     let tank = 0;
     let jeep = 0;
     let inf = 0;
+    let truck = 0;
     for (const u of a.units) {
       const f = statsOf(u.designId).family;
       if (f === 'tank') tank++;
       else if (f === 'light_vehicle') jeep++;
+      else if (f === 'support') truck++;
       else inf++;
     }
-    return `${a.factionId}|${Math.min(tank, 2)}|${Math.min(jeep, 1)}|${Math.min(inf, 3)}`;
+    return `${a.factionId}|${Math.min(tank, 2)}|${Math.min(jeep, 1)}|${Math.min(inf, 3)}|${Math.min(truck, 1)}`;
   }
 
   private makeArmy(a: Army, state: CampaignState): THREE.Group {
@@ -476,10 +478,11 @@ export class CampaignView {
     const uni = def?.uniformTint ?? '#666655';
     const color = state.factions[a.factionId]?.color ?? '#ffffff';
     const g = new THREE.Group();
-    const [, tankS, jeepS, infS] = this.armyKey(a).split('|');
+    const [, tankS, jeepS, infS, truckS] = this.armyKey(a).split('|');
     const tanks = Number(tankS);
     const jeeps = Number(jeepS);
     const inf = Number(infS);
+    const trucks = Number(truckS);
     const models = new THREE.Group();
     const slots: [number, number][] = [
       [0, 0.5],
@@ -508,6 +511,11 @@ export class CampaignView {
       const j = new THREE.Mesh(Models.jeep(tint), Materials.standard);
       j.scale.setScalar(CAMPAIGN_VEHICLE_SCALE * 1.15);
       place(j);
+    }
+    for (let k = 0; k < trucks; k++) {
+      const t = new THREE.Mesh(Models.truck(tint), Materials.standard);
+      t.scale.setScalar(CAMPAIGN_VEHICLE_SCALE * 1.1);
+      place(t);
     }
     for (let k = 0; k < inf; k++) {
       const sq = new THREE.Group();

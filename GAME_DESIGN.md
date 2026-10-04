@@ -152,10 +152,13 @@ armour, weapons, sensors, electronics. All stats are derived (`src/units/stats.t
 | Rifle Squad | 6 | 4 ALY · 3 CMP · 6 AMMO | 8h | 240 | 0 | 3.4 | 4.6 | 230 | rifles/LMG (160 m), disposable AT launchers (135 m) | — | 12 |
 | Recon Jeep | 3 | 16 ALY · 8 CMP · 10 FUEL · 4 AMMO | 13h | 200 | 4 | 16.5 | 9.5 | 320 | 12.7 mm HMG (175 m) | 20 | 16 |
 | Main Battle Tank | 3 | 48 ALY · 32 CMP · 25 FUEL · 10 AMMO | 47h | 900 | 520 | 7.1 | 4.7 | 190 | 120 mm gun (270 m), coax MG (170 m) | 60 | 24 |
+| Supply Truck | 2 | ALY · CMP · 60 FUEL · 30 AMMO (cargo) | ~14h | 220 | 0 | ~10 | ~6.3 | 150 | none | 140 (25 own reserve) | 60 cargo |
 
 Roles: infantry are cheap in materials but expensive in people, see well, hide in forests, and kill tanks
 from the flank; jeeps scout and shred infantry in the open but die to anything heavy; tanks dominate open
-ground and other vehicles but are half-blind and vulnerable to infantry in cover and from the sides/rear.
+ground and other vehicles but are half-blind and vulnerable to infantry in cover and from the sides/rear;
+supply trucks (family `support`, no weapons, combat power 0) carry the task force's fuel, ammunition and
+extra rations.
 
 ### 4.6 Armies (task forces)
 - Formed from a base garrison (*Deploy task force*), up to 24 units. Each has a named **commander**
@@ -163,6 +166,13 @@ ground and other vehicles but are half-blind and vulnerable to infantry in cover
 - Orders: move, attack army (pursuit), attack base, attack outpost (capture), return, stop; garrison /
   reinforce at a base.
 - Strategic fog of war: enemy forces are visible only near your bases, outposts and armies.
+- **Logistics**: near a friendly base units refill from the base stock (trucks load cargo 3× faster).
+  Away from bases, supply trucks top up the neediest units (8 FUEL and 4 AMMO per truck-hour), never
+  giving away their own 25-fuel reserve; each truck adds 40 rations. The army's fuel range pools truck
+  cargo with the vehicles' tanks. Each expedition starts with one truck in its task force; the AI adds
+  one per ~8 fighting units.
+- In battle trucks trail the force out of the line of fire and rearm/refuel units within 45 m; dry AI
+  units drive back to a truck instead of leaving the field. Trucks cannot hold the field alone.
 
 ### 4.7 Diplomacy: standoff → hostilities
 - Starts as an armed **standoff**: armies pass each other without fighting.

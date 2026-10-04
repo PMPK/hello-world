@@ -233,12 +233,13 @@ function thinkEconomy(ctx: SimContext, ai: AIState, base: Base): void {
 // Recruitment
 // ---------------------------------------------------------------------------
 
-function militaryCounts(state: CampaignState, factionId: string): { inf: number; jeep: number; tank: number; total: number } {
-  const r = { inf: 0, jeep: 0, tank: 0, total: 0 };
+function militaryCounts(state: CampaignState, factionId: string): { inf: number; jeep: number; tank: number; truck: number; total: number } {
+  const r = { inf: 0, jeep: 0, tank: 0, truck: 0, total: 0 };
   const add = (designId: string): void => {
     const fam = statsOf(designId).family;
     if (fam === 'infantry') r.inf++;
     else if (fam === 'light_vehicle') r.jeep++;
+    else if (fam === 'support') r.truck++;
     else r.tank++;
     r.total++;
   };
@@ -283,7 +284,9 @@ function thinkRecruitment(ctx: SimContext, ai: AIState, base: Base): void {
     } else if (b.typeId === 'vehicle_depot') {
       if (spare < 3 || soldiers + 3 > maxSoldiers) continue;
       const wantTank = counts.tank < Math.max(1, Math.ceil(counts.inf / 2));
-      const design = wantTank ? 'mbt' : counts.jeep < Math.max(2, Math.ceil(counts.inf / 3)) ? 'recon_jeep' : 'mbt';
+      // one supply truck per ~8 fighting units once a core force exists
+      const wantTruck = !wantTank && counts.total >= 6 && counts.truck < Math.floor((counts.total - counts.truck) / 8) && base.stock.fuel > 80;
+      const design = wantTruck ? 'supply_truck' : wantTank ? 'mbt' : counts.jeep < Math.max(2, Math.ceil(counts.inf / 3)) ? 'recon_jeep' : 'mbt';
       const st = statsOf(design);
       if (canAfford(base.stock, st.cost, 0.8)) queueUnit(state, b.id, design);
     }

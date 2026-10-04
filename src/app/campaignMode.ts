@@ -180,13 +180,15 @@ export class CampaignMode implements Mode, CampaignController {
       let tank = 0;
       let inf = 0;
       let jeep = 0;
+      let support = 0;
       for (const u of a.units) {
         const f = statsOf(u.designId).family;
         if (f === 'tank') tank++;
         else if (f === 'infantry') inf++;
+        else if (f === 'support') support++;
         else jeep++;
       }
-      const kind: SymbolKind = tank && inf ? 'mixed' : tank ? 'tank' : inf ? 'infantry' : 'light_vehicle';
+      const kind: SymbolKind = tank && inf ? 'mixed' : tank ? 'tank' : inf ? 'infantry' : jeep ? 'light_vehicle' : support ? 'support' : 'light_vehicle';
       const friendly = a.factionId === s.playerFactionId;
       const selected = this.selection?.kind === 'army' && this.selection.id === a.id;
       const pips = a.units.length <= 4 ? 1 : a.units.length <= 10 ? 2 : 3;
@@ -196,7 +198,7 @@ export class CampaignMode implements Mode, CampaignController {
         const range = fuelRange(a.units);
         const dry = a.units.some((u) => {
           const st = statsOf(u.designId);
-          return st.ammoCapacity > 0 && u.ammo < st.ammoCapacity * 0.25;
+          return st.weapons.length > 0 && st.ammoCapacity > 0 && u.ammo < st.ammoCapacity * 0.25;
         });
         if (range < 40) o.label(p.x, p.y - 18, 'LOW FUEL', '#e8c33c', 9);
         else if (dry) o.label(p.x, p.y - 18, 'LOW AMMO', '#e8c33c', 9);

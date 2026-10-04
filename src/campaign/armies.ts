@@ -20,18 +20,104 @@ export function armyMen(a: Army): number {
   return n;
 }
 
-/** How far (map units) a force can still drive before its vehicles run dry (Infinity on foot). */
+/** Fuel a supply truck keeps for its own driving; everything above it is cargo. */
+export const TRUCK_FUEL_RESERVE = 25;
+/** Rations carried per supply truck (added to the army's ration capacity). */
+export const TRUCK_RATIONS = 40;
+/** Field transfer rates per truck and hour. */
+const FIELD_FUEL_RATE = 8;
+const FIELD_AMMO_RATE = 4;
+
+export function isSupport(designId: string): boolean {
+  return statsOf(designId).family === 'support';
+}
+
+/**
+ * How far (map units) a force can still drive before its vehicles run dry
+ * (Infinity on foot). Supply trucks pool their cargo fuel with the force.
+ */
 export function fuelRange(units: { designId: string; fuel: number }[]): number {
-  let r = Infinity;
+  let minRange = Infinity;
+  let fighterFuel = 0;
+  let fighterBurn = 0;
+  let cargo = 0;
+  let truckRange = Infinity;
+  let trucks = 0;
   for (const u of units) {
     const st = statsOf(u.designId);
-    if (st.fuelPerUnit > 0) r = Math.min(r, u.fuel / st.fuelPerUnit);
+    if (st.fuelPerUnit <= 0) continue;
+    if (st.family === 'support') {
+      trucks++;
+      cargo += Math.max(0, u.fuel - TRUCK_FUEL_RESERVE);
+      truckRange = Math.min(truckRange, Math.min(u.fuel, TRUCK_FUEL_RESERVE) / st.fuelPerUnit);
+    } else {
+      fighterFuel += u.fuel;
+      fighterBurn += st.fuelPerUnit;
+      minRange = Math.min(minRange, u.fuel / st.fuelPerUnit);
+    }
   }
-  return r;
+  if (!trucks) return minRange;
+  const pooled = fighterBurn > 0 ? (fighterFuel + cargo) / fighterBurn : Infinity;
+  return Math.min(pooled, truckRange);
+}
+
+/** Cargo carried by an army's supply trucks (fuel above their own reserve, ammunition). */
+export function armySupplies(units: UnitInstance[]): { trucks: number; fuel: number; ammo: number } {
+  let trucks = 0;
+  let fuel = 0;
+  let ammo = 0;
+  for (const u of units) {
+    if (!isSupport(u.designId)) continue;
+    trucks++;
+    fuel += Math.max(0, u.fuel - TRUCK_FUEL_RESERVE);
+    ammo += u.ammo;
+  }
+  return { trucks, fuel, ammo };
+}
+
+function takeFromTrucks(trucks: UnitInstance[], kind: 'fuel' | 'ammo', amount: number): number {
+  let got = 0;
+  for (const t of trucks) {
+    const avail = kind === 'fuel' ? Math.max(0, t.fuel - TRUCK_FUEL_RESERVE) : t.ammo;
+    const take = Math.min(avail, amount - got);
+    if (take <= 0) continue;
+    t[kind] -= take;
+    got += take;
+    if (got >= amount - 1e-9) break;
+  }
+  return got;
+}
+
+/** Supply trucks top up the rest of their task force, neediest units first. */
+export function fieldResupply(units: UnitInstance[], dt: number): void {
+  const trucks = units.filter((u) => isSupport(u.designId));
+  if (!trucks.length) return;
+  for (const kind of ['fuel', 'ammo'] as const) {
+    let budget = trucks.length * (kind === 'fuel' ? FIELD_FUEL_RATE : FIELD_AMMO_RATE) * dt;
+    const needy = units
+      .filter((u) => !isSupport(u.designId))
+      .map((u) => {
+        const st = statsOf(u.designId);
+        const cap = kind === 'fuel' ? st.fuelCapacity : st.ammoCapacity;
+        return { u, cap, frac: cap > 0 ? u[kind] / cap : 1 };
+      })
+      .filter((x) => x.cap > 0 && x.u[kind] < x.cap - 1e-6)
+      .sort((a, b) => a.frac - b.frac);
+    for (const x of needy) {
+      if (budget <= 1e-9) break;
+      const want = Math.min(x.cap - x.u[kind], budget);
+      const got = takeFromTrucks(trucks, kind, want);
+      x.u[kind] += got;
+      budget -= got;
+      if (got < want - 1e-9) break; // trucks are empty
+    }
+  }
 }
 
 export function maxRations(a: Army): number {
-  return Math.max(4, armyMen(a) * FOOD_PER_PERSON_HOUR * 24 * RATION_DAYS);
+  let trucks = 0;
+  for (const u of a.units) if (isSupport(u.designId)) trucks++;
+  return Math.max(4, armyMen(a) * FOOD_PER_PERSON_HOUR * 24 * RATION_DAYS) + trucks * TRUCK_RATIONS;
 }
 
 /** Strategic speed in map units / hour, before terrain modifiers. */
@@ -356,6 +442,7 @@ export function stepArmies(ctx: SimContext, dt: number): void {
         home.stock.food -= take;
       }
     } else {
+      fieldResupply(army.units, dt);
       const eat = armyMen(army) * FOOD_PER_PERSON_HOUR * dt;
       if (army.food >= eat) {
         army.food -= eat;

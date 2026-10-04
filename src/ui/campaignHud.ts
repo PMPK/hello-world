@@ -4,7 +4,7 @@ import { RESOURCES, STOCK_RESOURCES, canAfford, formatCost, type PartialStock } 
 import { UNIT_DESIGNS } from '../data/unitDesigns';
 import { campaignDay, formatCampaignTime, formatDuration, type SpeedSetting } from '../core/time';
 import { dist } from '../core/math';
-import { armyBaseSpeed, armyMen, fuelRange, maxRations } from '../campaign/armies';
+import { armyBaseSpeed, armyMen, armySupplies, fuelRange, maxRations } from '../campaign/armies';
 import { canBuildOutpost, canBuildType, OUTPOST_RANGE } from '../campaign/construction';
 import { affordability, designsFor, MAX_QUEUE } from '../campaign/production';
 import { basesOf, isOutpost, relationOf } from '../campaign/queries';
@@ -585,14 +585,23 @@ export class CampaignHud {
     else if (o.type === 'return') order = 'Returning to base';
     const days = a.food / Math.max(0.001, armyMen(a) * FOOD_PER_PERSON_HOUR * 24);
     const range = fuelRange(a.units);
+    const supplies = armySupplies(a.units);
     const sec = this.section(body, 'Status');
-    this.kv(sec, [
+    const statusRows: [string, string, string?][] = [
       ['Orders', order, o.type === 'idle' ? 'muted' : 'accent'],
       ['Units / men', `${a.units.length} / ${armyMen(a)}`],
       ['Speed', `${armyBaseSpeed(a).toFixed(1)} km/h`],
       ['Rations', `${days.toFixed(1)} days`, days < 1 ? 'bad' : days < 2 ? 'warn' : ''],
       ['Fuel range', Number.isFinite(range) ? `${Math.floor(range)} km` : 'on foot', range < 40 ? 'bad' : range < 90 ? 'warn' : ''],
-    ]);
+    ];
+    if (supplies.trucks > 0) {
+      statusRows.push([
+        'Supply trucks',
+        `${supplies.trucks} · ${Math.round(supplies.fuel)} FUEL · ${Math.round(supplies.ammo)} AMMO`,
+        supplies.fuel < 10 && supplies.ammo < 5 ? 'warn' : '',
+      ]);
+    }
+    this.kv(sec, statusRows);
     sec.append(el('div', { style: { marginTop: '6px' } }, bar(a.food / Math.max(1, maxRations(a)))));
     const us = this.section(body, 'Units', 'HP · AMMO · FUEL');
     const list = el('div', 'list');

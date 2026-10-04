@@ -13,6 +13,7 @@ import { createArmy } from './armies';
 import { buildRoad, makeBuilding, suggestPlacement } from './construction';
 import { log, makeContext, newId, syncRng, type SimContext } from './context';
 import { createUnit } from './units';
+import { stepBaseEconomy } from '../economy/economy';
 import { STATE_VERSION, type Base, type CampaignState, type FactionState } from './types';
 
 export const STARTING_STOCK = {
@@ -136,7 +137,7 @@ function setupExpedition(ctx: SimContext, factionId: string, x: number, z: numbe
     buildRoad(ctx, base, ext);
   }
 
-  // Starting forces: a small field task force and a squad on guard duty.
+  // Starting forces: a small field task force with its supply truck and a squad on guard duty.
   const units = [
     createUnit(state, 'rifle_squad'),
     createUnit(state, 'rifle_squad'),
@@ -144,6 +145,7 @@ function setupExpedition(ctx: SimContext, factionId: string, x: number, z: numbe
     createUnit(state, 'recon_jeep'),
     createUnit(state, 'recon_jeep'),
     createUnit(state, 'mbt'),
+    createUnit(state, 'supply_truck'),
   ];
   const ang = rng.range(0, Math.PI * 2);
   let ax = x + Math.cos(ang) * (BASE_RADIUS + 3);
@@ -205,6 +207,8 @@ export function createCampaign(seed: number): Campaign {
   log(state, `Day 1. ${pBase.name} reports all modules operational.`, 'lore', player.id);
   log(state, INTRO_SIGNOFF, 'lore', player.id);
   log(state, `${FACTION_DEFS[enemy.defId].codename} landing site confirmed ${Math.round(dist(pBase.x, pBase.z, eBase.x, eBase.z))} km to the north-east.`, 'info', player.id);
+  // a zero-length economy pass assigns workers and fills the HUD snapshot before the clock starts
+  for (const b of [pBase, eBase]) stepBaseEconomy(ctx, b, 0);
   syncRng(ctx);
   return { state, world };
 }

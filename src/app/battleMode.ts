@@ -421,10 +421,10 @@ export class BattleMode implements Mode, BattleController {
       return;
     }
     // cycle: infantry -> tanks -> jeeps based on current
-    const order = ['infantry', 'tank', 'light_vehicle'];
+    const present = ['infantry', 'tank', 'light_vehicle', 'support'].filter((f) => this.sim.units.some((u) => this.mine(u) && u.stats.family === f));
     const famNow = first.stats.family;
     const allSame = [...this.selected].every((id) => this.sim.unitById(id)?.stats.family === famNow);
-    const fam = allSame ? order[(order.indexOf(famNow) + 1) % 3] : famNow;
+    const fam = allSame ? present[(present.indexOf(famNow) + 1) % present.length] : famNow;
     this.selected.clear();
     for (const u of this.sim.units) if (this.mine(u) && u.stats.family === fam) this.selected.add(u.id);
     this.syncSelection();

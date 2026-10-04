@@ -1,6 +1,6 @@
 # CURRENT STATE
 
-*Last updated: post-MVP iteration (defences, battle unit card, async auto-resolve).*
+*Last updated: post-MVP iteration (supply trucks, defences, battle unit card, async auto-resolve).*
 
 ## What works
 
@@ -22,7 +22,8 @@
 - **Units**: rifle squads, recon jeeps, main battle tanks derived from modular components; production
   consumes people + materials; garrison → task force deployment; garrison/reinforce at bases.
 - **Armies**: pathfinding on terrain/roads, rations, fuel consumption, resupply near bases, attack/pursuit,
-  return; named commanders.
+  return; named commanders. **Supply trucks** keep task forces fuelled and armed in the field (pooled fuel
+  range, extra rations, cargo shown in the army panel) and rearm nearby units in battle.
 - **Diplomacy**: standoff with rising tension → AI goes weapons-free at 100%; player attacks start hostilities.
 - **Battles**: battlefield generated from the campaign terrain; base buildings mapped in at real positions;
   deployment from approach direction; fog of war with LOS and concealment; directional armour; cover;
@@ -43,7 +44,7 @@
 - **PWA**: manifest (fullscreen, landscape), generated icons, Workbox precache (offline), install prompt button.
 - **Quality settings**: low / medium / high (pixel ratio, shadows, tree density); FPS counter option.
 - **Auto-resolve** runs in time slices with a progress dialog (no main-thread freeze on phones).
-- **Tests**: 41 Vitest unit tests; Playwright smoke tests on phone-landscape touch and desktop mouse profiles
+- **Tests**: 47 Vitest unit tests; Playwright smoke tests on phone-landscape touch and desktop mouse profiles
   (full loop incl. unit card, save/continue; fortified base assault).
 - **Deployment**: GitHub Actions CI + Pages deploy workflow (gh-pages branch). A single-file build is also
   published as a claude.ai Artifact (https://claude.ai/artifact/7qGUMq5vWjnaNKRHEyempW).
@@ -59,8 +60,8 @@
 ## Known issues / limitations
 
 - Strategic AI has full knowledge of the map (no fog of war for the AI).
-- Field armies cannot resupply away from a base (no supply trucks yet); tanks on long marches can run dry —
-  intended logistics pressure. The army panel shows fuel range and the map flags LOW FUEL / LOW AMMO.
+- Field armies without supply trucks cannot resupply away from a base; trucks themselves only refill at bases.
+  The army panel shows fuel range and truck cargo; the map flags LOW FUEL / LOW AMMO.
 - Battle unit separation is simple; large groups can jostle around obstacles. Paths are re-planned when blocked.
 - Infantry squads are drawn as up to 6 figures; there are no death animations (squads shrink).
 - Buildings block movement as circles; no garrisoning of infantry inside buildings.
@@ -83,7 +84,7 @@
 
 ## Best next tasks
 
-1. Supply trucks / field resupply (fuel range is already shown; no way to refuel in the field yet).
+1. Logistics depth: convoys that resupply field armies from bases; trucks as convoy escorts/targets.
 2. Defences: let the player see/attack enemy positions from the campaign map (intel), and garrison
    infantry inside bunkers.
 3. Infantry garrisoning buildings in battle (cover + capture mechanics).

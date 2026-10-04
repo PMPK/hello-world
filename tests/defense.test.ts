@@ -133,7 +133,7 @@ describe('defensive structures', () => {
   it('a hostile AI fortifies its base', () => {
     const c = freshCampaign();
     declareHostile(c, c.player, c.enemy);
-    advanceCampaign(c, 24 * 12);
+    advanceCampaign(c, 24 * 16);
     const forts = Object.values(c.state.buildings).filter(
       (b) => b.factionId === c.enemy && (b.typeId === 'bunker' || b.typeId === 'at_emplacement'),
     );

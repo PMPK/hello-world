@@ -460,13 +460,15 @@ export function stepGarrisonUpkeep(base: Base, dt: number): void {
 export function resupplyUnits(base: Base, units: Base['garrison'], dt: number, allowReplacements: boolean): void {
   for (const u of units) {
     const st = statsOf(u.designId);
+    // supply trucks load cargo from the depot much faster than units refill
+    const load = st.family === 'support' ? 3 : 1;
     if (u.ammo < st.ammoCapacity && base.stock.ammo > 0) {
-      const amt = Math.min(st.ammoCapacity - u.ammo, base.stock.ammo, 6 * dt);
+      const amt = Math.min(st.ammoCapacity - u.ammo, base.stock.ammo, 6 * load * dt);
       u.ammo += amt;
       base.stock.ammo -= amt;
     }
     if (st.fuelCapacity > 0 && u.fuel < st.fuelCapacity && base.stock.fuel > 0) {
-      const amt = Math.min(st.fuelCapacity - u.fuel, base.stock.fuel, 10 * dt);
+      const amt = Math.min(st.fuelCapacity - u.fuel, base.stock.fuel, 10 * load * dt);
       u.fuel += amt;
       base.stock.fuel -= amt;
     }

@@ -35,6 +35,7 @@ const NATO_GLYPH: Record<string, string> = {
   infantry: '<path d="M2 2L22 14M22 2L2 14"/>',
   tank: '<rect x="6" y="4.5" width="12" height="7" rx="3.5"/>',
   light_vehicle: '<path d="M2 14L22 2"/>',
+  support: '<path d="M1 11.5H23"/>',
 };
 
 function natoIcon(family: string): string {
@@ -44,6 +45,12 @@ function natoIcon(family: string): string {
 /** Human-readable description of what a unit is doing right now. */
 export function describeOrder(sim: BattleSim, u: BUnit): string {
   const o = u.order;
+  if (!u.stats.weapons.length) {
+    // unarmed support vehicles
+    if (o.type === 'move') return 'Moving';
+    if (o.type === 'retreat') return 'Falling back';
+    return u.ammo > 0 || u.fuel > 5 ? 'Standing by · resupplying units nearby' : 'Standing by · cargo empty';
+  }
   const engaging = !!u.target && sim.targetValid(u, u.target);
   switch (o.type) {
     case 'move':
@@ -297,12 +304,15 @@ export class BattleHud {
       return { row, fill, val };
     };
     const hp = mkRow('HP');
-    const ammo = mkRow('AMMO');
+    const ammo = mkRow(u.stats.weapons.length ? 'AMMO' : 'CARGO');
     const fuel = mkRow('FUEL');
     const men = el('div', 'uc-line mono');
     const weapons = el('div', 'uc-weapons');
     for (const w of u.stats.weapons) {
       weapons.append(el('div', 'uc-weapon', el('span', { text: w.name }), el('span', { class: 'mono muted', text: `${Math.round(w.range)} m` })));
+    }
+    if (!u.stats.weapons.length) {
+      weapons.append(el('div', { class: 'muted', text: 'Unarmed · rearms and refuels units within 45 m' }));
     }
     const order = el('div', 'uc-order');
     const flags = el('div', 'uc-flags');

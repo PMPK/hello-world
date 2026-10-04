@@ -12,7 +12,7 @@ import type { PartialStock } from './resources';
 
 export type ComponentKind = 'chassis' | 'engine' | 'armor' | 'weapon' | 'sensor' | 'electronics';
 
-export type UnitFamily = 'infantry' | 'light_vehicle' | 'tank';
+export type UnitFamily = 'infantry' | 'light_vehicle' | 'tank' | 'support';
 export type Mobility = 'foot' | 'wheeled' | 'tracked';
 
 interface ComponentBase {
@@ -48,7 +48,7 @@ export interface ChassisDef extends ComponentBase {
   /** How hard the unit is to spot (0 = obvious, 1 = invisible). */
   stealth: number;
   /** Render model key. */
-  model: 'infantry' | 'jeep' | 'tank';
+  model: 'infantry' | 'jeep' | 'tank' | 'truck';
 }
 
 export interface EngineDef extends ComponentBase {
@@ -152,6 +152,28 @@ export const CHASSIS: Record<string, ChassisDef> = {
     strategicSpeed: 9,
     stealth: 0.15,
     model: 'jeep',
+  },
+  truck_6x6: {
+    id: 'truck_6x6',
+    kind: 'chassis',
+    name: '6x6 Logistics Truck',
+    family: 'support',
+    mobility: 'wheeled',
+    crew: 2,
+    baseHp: 220,
+    mass: 9,
+    cost: { refined: 14, components: 4 },
+    buildHours: 10,
+    slots: { weapons: 0, sensors: 0, engine: true, armor: true, electronics: 0 },
+    // own tank plus fuel cargo; the ammunition "capacity" is cargo for the task force
+    fuelCapacity: 140,
+    ammoCapacity: 60,
+    size: 5,
+    baseVision: 150,
+    topSpeed: 13,
+    strategicSpeed: 8,
+    stealth: 0.05,
+    model: 'truck',
   },
   mbt_hull: {
     id: 'mbt_hull',

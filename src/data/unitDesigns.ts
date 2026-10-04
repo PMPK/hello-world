@@ -65,6 +65,20 @@ export const UNIT_DESIGNS: Record<string, UnitDesign> = {
     producedAt: 'vehicle_depot',
     extraCost: { fuel: 25, ammo: 10 },
   },
+  supply_truck: {
+    id: 'supply_truck',
+    name: 'Supply Truck',
+    short: 'SUP',
+    description:
+      'Unarmed 6x6 truck carrying fuel, ammunition and rations for its task force. Keeps armies supplied away from bases and rearms nearby units in battle. Protect it.',
+    chassis: 'truck_6x6',
+    engine: 'diesel_light',
+    armor: 'none',
+    weapons: [],
+    sensors: [],
+    producedAt: 'vehicle_depot',
+    extraCost: { fuel: 60, ammo: 30 },
+  },
 };
 
-export const DESIGN_ORDER = ['rifle_squad', 'recon_jeep', 'mbt'];
+export const DESIGN_ORDER = ['rifle_squad', 'recon_jeep', 'mbt', 'supply_truck'];

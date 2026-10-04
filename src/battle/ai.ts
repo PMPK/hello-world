@@ -98,7 +98,8 @@ export class TacticalAI {
     const start = sim.startPower[this.side] || 1;
 
     // ---- Withdraw when the fight is clearly lost --------------------------
-    const allDry = own.every((u) => u.ammo < Math.min(...u.stats.weapons.map((w) => w.ammoPerShot)));
+    const fighters = own.filter((u) => u.stats.weapons.length > 0);
+    const allDry = fighters.every((u) => u.ammo < Math.min(...u.stats.weapons.map((w) => w.ammoPerShot)));
     if (!this.retreating && ((ownPower < start * 0.3 && ownPower < enemyPower * 0.6) || allDry)) {
       this.retreating = true;
     }
@@ -115,11 +116,43 @@ export class TacticalAI {
     // Field-battle defenders wait for contact, then fight.
     if (this.mode === 'defend' && sim.setup.kind === 'field' && known.length && sim.time > 15) this.mode = 'attack';
 
-    this.assignFocus(own);
+    this.assignFocus(fighters);
     this.individualSurvival(own);
 
-    if (this.mode === 'attack') this.planAttack(own, ownPower);
-    else this.planDefense(own);
+    if (this.mode === 'attack') this.planAttack(fighters, ownPower);
+    else this.planDefense(fighters);
+    this.supportFollow(own.filter((u) => u.stats.weapons.length === 0), fighters);
+  }
+
+  /** Supply trucks trail the fighting force (or stay in the base) out of the line of fire. */
+  private supportFollow(trucks: BUnit[], fighters: BUnit[]): void {
+    if (!trucks.length) return;
+    const c = centroid(fighters);
+    if (!c) return;
+    let gx = c.x;
+    let gz = c.z;
+    const enemyC = centroid([...this.memory.values()]);
+    const home = this.mode === 'defend' ? centroid(this.ownBuildings()) : null;
+    if (home) {
+      gx = home.x;
+      gz = home.z;
+    } else if (enemyC) {
+      const dx = c.x - enemyC.x;
+      const dz = c.z - enemyC.z;
+      const l = Math.hypot(dx, dz) || 1;
+      gx = c.x + (dx / l) * 110;
+      gz = c.z + (dz / l) * 110;
+    } else {
+      const e = this.sim.setup.sides[this.side].entry;
+      gx = c.x - e.dirX * 90;
+      gz = c.z - e.dirZ * 90;
+    }
+    trucks.forEach((t, k) => {
+      if (t.order.type === 'retreat' || t.task === 'fall back') return;
+      const lateral = (k - (trucks.length - 1) / 2) * 25;
+      this.moveTo(t, gx + lateral, gz - lateral * 0.3, false, 35);
+      t.task = 'supply';
+    });
   }
 
   private updateMemory(): void {
@@ -221,7 +254,7 @@ export class TacticalAI {
     const bunkers = forts.filter((b) => !isAT(b));
     const guns = forts.filter(isAT);
     for (const u of own) {
-      if (u.order.type === 'retreat' || u.task === 'fall back') continue;
+      if (u.order.type === 'retreat' || u.task === 'fall back' || u.task === 'rearm') continue;
       if (u.order.type === 'attack' && sim.targetValid(u, u.order.target)) continue;
       let tgt: BBuilding | undefined;
       if (u.stats.family === 'tank') tgt = nearest(u, bunkers, 380) ?? nearest(u, guns, 340);
@@ -277,11 +310,25 @@ export class TacticalAI {
     const sim = this.sim;
     const rear = sim.setup.sides[this.side].entry;
     for (const u of own) {
-      const minShot = Math.min(...u.stats.weapons.map((w) => w.ammoPerShot));
-      if (u.ammo < minShot) {
-        if (u.order.type !== 'retreat') sim.orderRetreat([u.id]);
-        u.task = 'no ammo';
-        continue;
+      const minShot = u.stats.weapons.length ? Math.min(...u.stats.weapons.map((w) => w.ammoPerShot)) : 0;
+      if (u.stats.weapons.length) {
+        const dry = u.ammo < minShot;
+        const rearming = u.task === 'rearm' && u.ammo < u.stats.ammoCapacity * 0.6;
+        if (dry || rearming) {
+          // rearm at a supply truck if one has ammunition, otherwise leave the field when dry
+          const truck = own.find((t) => t.stats.family === 'support' && t.ammo > 2);
+          if (truck) {
+            this.moveTo(u, truck.x, truck.z, false, 20);
+            u.task = 'rearm';
+            continue;
+          }
+          if (dry) {
+            if (u.order.type !== 'retreat') sim.orderRetreat([u.id]);
+            u.task = 'no ammo';
+            continue;
+          }
+        }
+        if (u.task === 'rearm') u.task = '';
       }
       const hpF = u.hp / u.stats.maxHp;
       if (u.stats.isVehicle && hpF < 0.28 && u.order.type !== 'retreat') {
@@ -387,7 +434,7 @@ export class TacticalAI {
     if (!waiting) this.reduceDefenses(own);
 
     for (const u of own) {
-      if (u.order.type === 'retreat' || u.task === 'fall back') continue;
+      if (u.order.type === 'retreat' || u.task === 'fall back' || u.task === 'rearm') continue;
       if (u.order.type === 'attack' && sim.targetValid(u, u.order.target)) continue;
       const isFlanker = this.flankers.has(u.id);
       if (isFlanker && this.flankPoint) {
@@ -520,7 +567,7 @@ export class TacticalAI {
       return !!b && military.has(b.spec.typeId);
     });
     own.forEach((u, k) => {
-      if (u.order.type === 'retreat' || u.task === 'fall back') return;
+      if (u.order.type === 'retreat' || u.task === 'fall back' || u.task === 'rearm') return;
       if (u.order.type === 'attack' && this.sim.targetValid(u, u.order.target)) return;
       if (u.stats.family === 'tank' && demolish.length) {
         this.attack(u, { kind: 'building', id: demolish[k % demolish.length].id });
@@ -557,7 +604,7 @@ export class TacticalAI {
     const anchor = buildings.slice().sort((a, b) => dist(a.x, a.z, threatC.x, threatC.z) - dist(b.x, b.z, threatC.x, threatC.z))[0] ?? home;
 
     for (const u of own) {
-      if (u.order.type === 'retreat' || u.task === 'fall back') continue;
+      if (u.order.type === 'retreat' || u.task === 'fall back' || u.task === 'rearm') continue;
       if (u.order.type === 'attack' && sim.targetValid(u, u.order.target)) continue;
       const fam = u.stats.family;
       if (fam === 'infantry') {

@@ -3,7 +3,7 @@
  * labels, health bars, selection boxes and order markers. Cheap to draw and
  * readable at any zoom level on small screens.
  */
-export type SymbolKind = 'infantry' | 'light_vehicle' | 'tank' | 'mixed' | 'hq';
+export type SymbolKind = 'infantry' | 'light_vehicle' | 'tank' | 'support' | 'mixed' | 'hq';
 
 export const FRIEND = '#5fb4ff';
 export const FOE = '#ff6a4d';
@@ -73,6 +73,11 @@ export class Overlay {
     if (kind === 'light_vehicle') {
       c.moveTo(-iw, ih);
       c.lineTo(iw, -ih);
+    }
+    if (kind === 'support') {
+      // sustainment: bar across the lower part of the frame
+      c.moveTo(-iw, ih * 0.45);
+      c.lineTo(iw, ih * 0.45);
     }
     c.stroke();
     if (kind === 'tank' || kind === 'mixed') {

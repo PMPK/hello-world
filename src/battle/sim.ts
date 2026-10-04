@@ -77,6 +77,17 @@ const CASEMATE_TRAVERSE = 4;
 /** Weapons doing less than this per hit cannot hurt hardened defences. */
 const HARDENED_MIN_DAMAGE = 20;
 
+/** Units that can fight (supply trucks and other support vehicles cannot). */
+export function isCombatant(u: BUnit): boolean {
+  return u.stats.weapons.length > 0;
+}
+
+/** Supply trucks rearm/refuel friendly units within this radius (metres). */
+const SUPPLY_RADIUS = 45;
+/** Per truck and second. */
+const SUPPLY_AMMO_RATE = 0.8;
+const SUPPLY_FUEL_RATE = 1.5;
+
 /** True when the unit cannot fire any of its weapons for lack of ammunition. */
 export function outOfAmmo(u: BUnit): boolean {
   if (!u.stats.weapons.length) return false;
@@ -123,6 +134,7 @@ export class BattleSim {
   readonly startPower: [number, number] = [0, 0];
   /** Units that left the field on each side's retreat. */
   private visTimer = 0;
+  private supplyTimer = 0;
   private endTimer = 0;
   private nextId = 1;
   private navs: Record<'foot' | 'wheeled' | 'tracked', GridGraph>;
@@ -176,7 +188,7 @@ export class BattleSim {
     for (const s of opts.aiSides) this.ais[s] = new TacticalAI(this, s);
     this.undefended =
       (setup.kind === 'base_assault' || setup.kind === 'outpost') &&
-      this.units.every((u) => u.side !== 1) &&
+      !this.units.some((u) => u.side === 1 && isCombatant(u)) &&
       !this.buildings.some((b) => b.side === 1 && isArmed(b));
     this.updateVisibility();
   }
@@ -316,9 +328,9 @@ export class BattleSim {
     const e = this.setup.sides[side].entry;
     const px = -e.dirZ;
     const pz = e.dirX;
-    const rows: Record<string, BUnit[]> = { tank: [], infantry: [], light_vehicle: [] };
+    const rows: Record<string, BUnit[]> = { tank: [], infantry: [], light_vehicle: [], support: [] };
     for (const u of units) rows[u.stats.family].push(u);
-    const rowDepth: Record<string, number> = { tank: 0, infantry: -32, light_vehicle: -62 };
+    const rowDepth: Record<string, number> = { tank: 0, infantry: -32, light_vehicle: -62, support: -95 };
     for (const fam of Object.keys(rows)) {
       const list = rows[fam];
       const spacing = fam === 'infantry' ? 20 : 24;
@@ -625,6 +637,12 @@ export class BattleSim {
     for (const b of this.buildings) if (isArmed(b)) this.updateDefense(b, dt);
     this.separate();
     this.deployReserves();
+
+    this.supplyTimer -= dt;
+    if (this.supplyTimer <= 0) {
+      this.supplyTimer = 1;
+      this.battleResupply(1);
+    }
 
     this.endTimer -= dt;
     if (this.endTimer <= 0) {
@@ -1104,6 +1122,37 @@ export class BattleSim {
   }
 
   // ---------------------------------------------------------------------------
+  // Logistics: supply trucks rearm and refuel units close to them
+  // ---------------------------------------------------------------------------
+
+  private battleResupply(interval: number): void {
+    for (const t of this.units) {
+      if (t.stats.family !== 'support' || !isActive(t)) continue;
+      let ammo = Math.min(t.ammo, SUPPLY_AMMO_RATE * interval);
+      let fuel = Math.min(Math.max(0, t.fuel - 5), SUPPLY_FUEL_RATE * interval);
+      if (ammo <= 0 && fuel <= 0) continue;
+      const near = this.units
+        .filter((u) => u.side === t.side && u !== t && isActive(u) && isCombatant(u) && dist(u.x, u.z, t.x, t.z) < SUPPLY_RADIUS)
+        .sort((a, b) => a.ammo / Math.max(1, a.stats.ammoCapacity) - b.ammo / Math.max(1, b.stats.ammoCapacity));
+      for (const u of near) {
+        if (ammo > 0 && u.ammo < u.stats.ammoCapacity) {
+          const give = Math.min(ammo, u.stats.ammoCapacity - u.ammo);
+          u.ammo += give;
+          t.ammo -= give;
+          ammo -= give;
+        }
+        if (fuel > 0 && u.stats.fuelCapacity > 0 && u.fuel < u.stats.fuelCapacity) {
+          const give = Math.min(fuel, u.stats.fuelCapacity - u.fuel);
+          u.fuel += give;
+          t.fuel -= give;
+          fuel -= give;
+        }
+        if (ammo <= 0 && fuel <= 0) break;
+      }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Defensive structures
   // ---------------------------------------------------------------------------
 
@@ -1283,7 +1332,8 @@ export class BattleSim {
   // ---------------------------------------------------------------------------
 
   private remaining(side: SideIndex): number {
-    let n = this.units.filter((u) => u.side === side && u.alive && !u.retreated).length;
+    // support vehicles cannot hold the field on their own
+    let n = this.units.filter((u) => u.side === side && u.alive && !u.retreated && isCombatant(u)).length;
     // a defended objective is not taken while its armed positions hold out
     if (side === 1 && this.setup.kind !== 'field') n += this.buildings.filter((b) => b.side === 1 && isArmed(b)).length;
     return n;
@@ -1452,5 +1502,5 @@ export class BattleSim {
 }
 
 function famRank(f: string): number {
-  return f === 'tank' ? 0 : f === 'infantry' ? 1 : 2;
+  return f === 'tank' ? 0 : f === 'infantry' ? 1 : f === 'light_vehicle' ? 2 : 3;
 }
