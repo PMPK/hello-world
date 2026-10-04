@@ -33,13 +33,13 @@ function battleTips(touch: boolean): string[] {
     ? [
         'Tap a unit to select it, double-tap to select every unit of that type, or use ALL / TYPE / BOX.',
         'Tap the ground to move, tap an enemy to attack, long-press the ground to attack-move (units fight on the way).',
-        'Select infantry and tap one of your buildings to garrison it — cover, height and concealment.',
+        'Select infantry and tap one of your buildings to garrison it — cover, height and concealment. Rival buildings with no defenders inside can be occupied too.',
         'Keep tanks back from infantry in forests; use the ridges. FALL BACK pulls the selection off the field.',
       ]
     : [
         'Left-click or drag a box to select; Ctrl+A selects everything; double-click selects that type.',
         'Right-click the ground to move or an enemy to attack; A then click = attack-move. H hold · S stop · X fall back.',
-        'Select infantry and click one of your buildings to garrison it — cover, height and concealment.',
+        'Select infantry and click one of your buildings to garrison it — cover, height and concealment. Rival buildings with no defenders inside can be occupied too.',
         'Keep tanks back from infantry in forests; use the ridges. C centres the camera on the selection.',
       ];
 }

@@ -347,7 +347,8 @@ export class TacticalAI {
    */
   private shellGarrisons(own: BUnit[]): void {
     const sim = this.sim;
-    const held = sim.buildings.filter((b) => b.side !== this.side && !b.destroyed && sim.occupants(b).some((u) => u.seenBy[this.side]));
+    // any structure with spotted enemies inside, ours included (attackers may have taken it)
+    const held = sim.buildings.filter((b) => !b.destroyed && sim.occupants(b).some((u) => u.side !== this.side && u.seenBy[this.side]));
     if (!held.length) return;
     for (const u of own) {
       if (u.stats.family !== 'tank' || u.task === 'fall back' || u.order.type === 'retreat') continue;

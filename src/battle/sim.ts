@@ -460,7 +460,11 @@ export class BattleSim {
       return !!e && isActive(e) && e.side !== u.side;
     }
     const b = this.buildingById(t.id);
-    return !!b && !b.destroyed && b.side !== u.side;
+    if (!b || b.destroyed) return false;
+    if (b.side !== u.side) return true;
+    // one of our own structures that the enemy has taken
+    for (const o of this.units) if (o.inside === b.id && o.side !== u.side && isActive(o)) return true;
+    return false;
   }
 
   /** Squads a structure can hold right now (0 for destroyed, unfinished or unsuitable buildings). */
@@ -476,8 +480,12 @@ export class BattleSim {
 
   /** Can this unit garrison that structure (own side, infantry, room left)? */
   canGarrison(u: BUnit, b: BBuilding): boolean {
-    if (u.stats.isVehicle || u.stats.family !== 'infantry' || b.side !== u.side) return false;
+    if (u.stats.isVehicle || u.stats.family !== 'infantry') return false;
     if (u.inside === b.id) return true;
+    // a rival structure can be occupied once its defenders are out (fortifications keep their crews);
+    // the two sides never share a building
+    if (b.side !== u.side && b.defense) return false;
+    for (const o of this.units) if (o.inside === b.id && o.side !== u.side && isActive(o)) return false;
     const cap = this.garrisonCapacity(b);
     if (cap <= 0) return false;
     let taken = 0;

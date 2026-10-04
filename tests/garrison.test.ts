@@ -131,4 +131,31 @@ describe('garrisoning buildings', () => {
     const inside = defenders(sim).filter((u) => u.inside !== null);
     expect(inside.length).toBeGreaterThan(0);
   });
+
+  it('attacking infantry occupy a cleared enemy building, never one the defenders hold or a fortification', () => {
+    const c = freshCampaign();
+    const sim = setupSim(c, { rifle_squad: 2 }, 1);
+    const hab = habitat(sim);
+    const attackers = sim.units.filter((u) => u.side === 0 && u.stats.family === 'infantry' && !u.reserve);
+    const [defender] = defenders(sim);
+    // held by a defender: no way in
+    expect(sim.orderGarrison([defender.id], hab.id)).toBe(1);
+    runUntil(sim, () => defender.inside === hab.id, 90);
+    expect(defender.inside).toBe(hab.id);
+    expect(sim.canGarrison(attackers[0], hab)).toBe(false);
+    // the defender leaves: the building can be taken, and then it is closed to the defenders
+    sim.orderMove([defender.id], defender.x + 40, defender.z, false);
+    expect(defender.inside).toBeNull();
+    expect(sim.canGarrison(attackers[0], hab)).toBe(true);
+    expect(sim.orderGarrison([attackers[0].id], hab.id)).toBe(1);
+    runUntil(sim, () => attackers[0].inside === hab.id, 120);
+    expect(attackers[0].inside).toBe(hab.id);
+    expect(sim.canGarrison(defender, hab)).toBe(false);
+    // the defenders may now fire on their own building
+    expect(sim.targetValid(defender, { kind: 'building', id: hab.id })).toBe(true);
+    // fortifications keep their crews
+    const fort = sim.buildings.find((b) => b.side === 1 && b.defense);
+    if (fort) expect(sim.canGarrison(attackers[1], fort)).toBe(false);
+  });
 });
+

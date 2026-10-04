@@ -283,7 +283,10 @@ alien technology, cybernetics, consciousness transfer, vehicles and mechs are re
   the squads inside a little, and a collapse injures them badly and throws them out (suppressed). A move
   order brings them out. Tap one of your buildings with infantry selected to garrison it (vehicles move
   next to it); tap it with nothing selected to select its garrison. GARRISON n/cap badges mark occupied
-  buildings (enemy garrisons once spotted).
+  buildings (enemy garrisons once spotted). Infantry can also **occupy a rival structure** once no
+  defender is inside (OCCUPY badges while only infantry is selected; fortifications keep their crews and
+  the two sides never share a building); the defenders may then fire on their own building (tanks shell
+  it) — it changes hands only with the base.
 - **Structures** take damage (explicit orders, AI demolition of military production in sieges, and stray
   heavy rounds) and can be destroyed. **Defensive positions** acquire targets, traverse and fire on their
   own, are engaged automatically by enemy units that can hurt them (armour, target profile and crew

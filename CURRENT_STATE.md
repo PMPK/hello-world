@@ -1,7 +1,7 @@
 # CURRENT STATE
 
 *Last updated: post-MVP iteration 2 (research, garrisons, relief landings, convoys and supply runs, AI patrols,
-living bases, in-game help, ambient music, strategic intel). Schema v10; 116 unit + 18 e2e tests green.*
+living bases, in-game help, ambient music, strategic intel). Schema v10; 117 unit + 18 e2e tests green.*
 
 ## What works
 
@@ -62,7 +62,9 @@ living bases, in-game help, ambient music, strategic intel). Schema v10; 116 uni
   HOLD, STOP, FALL BACK); mouse/keyboard RTS controls. **Unit card**: tappable selection grid, single-unit
   details (men, HP, ammo, fuel, weapons and ranges, current order, cover/suppression/ammo flags),
   follow camera (V) and clear selection. **Garrisons**: infantry occupy friendly buildings (tap the
-  building; capacity 1–3 squads) for cover, height and concealment; heavy hits and collapses hurt them.
+  building; capacity 1–3 squads) for cover, height and concealment — and rival structures once they are
+  clear of defenders (not fortifications); heavy hits and collapses hurt them; defenders shell their own
+  buildings held by attackers.
 - **Tactical AI**: memory under fog, recon, tank stand-off/high ground, infantry cover & AT ambushes,
   flanking group, focus fire, fallback, wait-when-outmatched, withdrawal; siege defence; reduces enemy
   fortifications with the right arm (tanks vs bunkers, infantry vs AT gun pits); siege defenders garrison
@@ -101,7 +103,7 @@ living bases, in-game help, ambient music, strategic intel). Schema v10; 116 uni
   manual (campaign + battle).
 - **Crash guard**: a single failing frame is skipped; 30 in a row stop the game with a "The simulation
   stopped" dialog (error text, Reload / Main menu) instead of a silent freeze. Saves are untouched.
-- **Tests**: 116 Vitest unit tests; Playwright smoke tests on phone-landscape touch and desktop mouse profiles
+- **Tests**: 117 Vitest unit tests; Playwright smoke tests on phone-landscape touch and desktop mouse profiles
   (full loop incl. unit card, save/continue, save-slot listing and import; fortified base assault;
   task force split/merge; founding a base and sending it a convoy; research lab project switching;
   tap-to-garrison in a base battle; supply run and auto supply for a task force; standing convoy set up and stopped; intel alert → Show → last known
@@ -177,8 +179,8 @@ is listed per day), `npm run sim:battle` (`ONLY=<label>` filters matrix lines), 
    cannot reach your base (patrols stay within 110 km of home), so its base assaults still use the true
    garrison strength. Longer recon runs (or recon flights) would let it use its own base reports instead.
 2. **Logistics depth**: escorts for convoys and supply runs; AI escorts for its own convoys.
-3. **Battle**: infantry capturing enemy structures; infantry garrisoning bunkers (extra crew); garrisoned
-   squads firing from the building edge instead of its centre.
+3. **Battle**: infantry re-crewing silenced bunkers / AT guns; the attacking AI occupying structures it has
+   cleared; garrisoned squads firing from the building edge instead of its centre.
 4. **Base specialisation** (e.g. mining town, fortress, depot) on top of the existing per-base economy.
 5. **Performance**: profile on a real phone (rendering is the main cost; the battle simulation measures
    ≈ 0.26 ms per sub-step for 60 units, see ARCHITECTURE.md, so a Web Worker is not needed yet).

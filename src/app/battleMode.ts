@@ -267,15 +267,19 @@ export class BattleMode implements Mode, BattleController {
       }
       const friendlyB = b.side === this.playerSide;
       // garrison badge: ours always, theirs once spotted; free room while only infantry is selected
-      const inside = this.sim.occupants(b).filter((u) => friendlyB || u.seenBy[this.playerSide]);
+      const all = this.sim.occupants(b);
+      const ours = all.filter((u) => u.side === this.playerSide);
+      const inside = ours.length ? ours : all.filter((u) => u.seenBy[this.playerSide]);
+      const held = ours.length > 0;
       const cap = this.sim.garrisonCapacity(b);
-      const showRoom = friendlyB && cap > 0 && infantryOnly;
+      // a rival structure with no defenders seen inside can be taken
+      const showRoom = cap > 0 && infantryOnly && (friendlyB || (!b.defense && !all.some((u) => u.side !== this.playerSide && u.seenBy[this.playerSide])));
       if (inside.length || showRoom) {
         const p = this.view.toScreen(b.x, bHeight(this.sim.terrain, b.x, b.z) + 16, b.z);
         if (p) {
           const sel = inside.some((u) => this.selected.has(u.id));
-          const text = friendlyB ? `GARRISON ${inside.length}/${cap}` : `GARRISON ${inside.length}`;
-          o.label(p.x, p.y - 10, sel ? `▶ ${text}` : text, friendlyB ? FRIEND : FOE, 9);
+          const text = held || friendlyB ? `GARRISON ${inside.length}/${cap}` : inside.length ? `GARRISON ${inside.length}` : `OCCUPY 0/${cap}`;
+          o.label(p.x, p.y - 10, sel ? `▶ ${text}` : text, held || friendlyB ? FRIEND : FOE, 9);
         }
       }
       if (hpF >= 0.999 && !far) continue;
@@ -385,24 +389,35 @@ export class BattleMode implements Mode, BattleController {
     }
     if (pick.kind === 'building') {
       const b = this.sim.buildingById(pick.id)!;
-      if (b.side !== this.playerSide && this.selected.size) {
-        this.sim.orderAttack([...this.selected], { kind: 'building', id: b.id });
+      const ids = [...this.selected];
+      // infantry take a rival structure once it is clear of defenders; anything else attacks it
+      const occupy =
+        b.side !== this.playerSide &&
+        ids.length > 0 &&
+        this.selectionInfantryOnly() &&
+        ids.some((id) => {
+          const u = this.sim.unitById(id);
+          return !!u && this.sim.canGarrison(u, b);
+        });
+      // one of ours taken by the enemy is a target like theirs
+      const enemyHeld = this.sim.occupants(b).some((u) => u.side !== this.playerSide && u.seenBy[this.playerSide]);
+      if ((b.side !== this.playerSide || enemyHeld) && ids.length && !occupy) {
+        this.sim.orderAttack(ids, { kind: 'building', id: b.id });
         this.orderMarks.push({ x: b.x, z: b.z, t: this.sim.time, attack: true });
         this.app.audio.ui('confirm');
         return;
       }
-      if (b.side === this.playerSide && !commandButton && !this.selected.size) {
-        // tapping one of our buildings selects its garrison
-        const inside = this.sim.occupants(b);
+      if (!commandButton && !this.selected.size) {
+        // tapping a building we hold selects its garrison
+        const inside = this.sim.occupants(b).filter((u) => u.side === this.playerSide);
         if (inside.length) {
           for (const u of inside) this.selected.add(u.id);
           this.syncSelection();
         }
         return;
       }
-      if (b.side === this.playerSide && this.selected.size) {
+      if ((b.side === this.playerSide || occupy) && ids.length) {
         // infantry occupy the building (as many as it holds); everyone else moves next to it
-        const ids = [...this.selected];
         const sent = this.sim.orderGarrison(ids, b.id);
         const rest = ids.filter((id) => {
           const u = this.sim.unitById(id);
