@@ -1322,13 +1322,32 @@ body {
   }
 }
 
-@media (max-width: 640px) {
-  .res {
-    min-width: 52px;
-    padding: 0 6px;
+@media (max-width: 760px) {
+  /* narrow phones: time of day only, a one-line status chip, and a fade that hints the strip scrolls */
+  .clock {
+    min-width: 0;
+  }
+  .clock .cal {
+    display: none;
   }
   .status-chip {
     min-width: 0;
+    padding: 0 8px;
+  }
+  .status-chip .s1 {
+    display: none;
+  }
+  .res-strip {
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent);
+  }
+  .res {
+    min-width: 48px;
+    padding: 0 6px;
+  }
+  .seg .btn {
+    min-width: 42px;
+    padding: 0 8px;
   }
 }
 

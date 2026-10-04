@@ -233,6 +233,7 @@ export class BattleMode implements Mode, BattleController {
       else if (friendly && u.stats.fuelCapacity > 0 && u.fuel <= 0) o.label(p.x, p.y - 22, 'NO FUEL', '#e8c33c', 9);
     }
     // enemy structures marker for targeting
+    const infantryOnly = this.selectionInfantryOnly();
     for (const b of this.sim.buildings) {
       if (b.destroyed) continue;
       const hpF = b.hp / b.maxHp;
@@ -252,10 +253,10 @@ export class BattleMode implements Mode, BattleController {
         continue;
       }
       const friendlyB = b.side === this.playerSide;
-      // garrison badge: ours always, theirs once spotted; free room while infantry is selected
+      // garrison badge: ours always, theirs once spotted; free room while only infantry is selected
       const inside = this.sim.occupants(b).filter((u) => friendlyB || u.seenBy[this.playerSide]);
       const cap = this.sim.garrisonCapacity(b);
-      const showRoom = friendlyB && cap > 0 && this.selectionHasInfantry();
+      const showRoom = friendlyB && cap > 0 && infantryOnly;
       if (inside.length || showRoom) {
         const p = this.view.toScreen(b.x, bHeight(this.sim.terrain, b.x, b.z) + 16, b.z);
         if (p) {
@@ -429,9 +430,10 @@ export class BattleMode implements Mode, BattleController {
     }
   }
 
-  private selectionHasInfantry(): boolean {
-    for (const id of this.selected) if (this.sim.unitById(id)?.stats.family === 'infantry') return true;
-    return false;
+  private selectionInfantryOnly(): boolean {
+    if (!this.selected.size) return false;
+    for (const id of this.selected) if (this.sim.unitById(id)?.stats.family !== 'infantry') return false;
+    return true;
   }
 
   private syncSelection(): void {

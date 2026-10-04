@@ -220,7 +220,11 @@ export class CampaignHud {
 
   private updateTop(): void {
     const s = this.c.state;
-    this.clockDate.textContent = formatCampaignTime(s.time);
+    // the calendar date is dropped on narrow phones (CSS), the time of day always shows
+    const stamp = formatCampaignTime(s.time);
+    const cut = stamp.lastIndexOf(' · ');
+    clear(this.clockDate);
+    this.clockDate.append(el('span', { class: 'cal', text: stamp.slice(0, cut + 3) }), el('span', { text: stamp.slice(cut + 3) }));
     this.clockDay.textContent = `Day ${campaignDay(s.time)} · ${this.c.speed === 0 ? 'Paused' : `${this.c.speed}× speed`}`;
     const speeds: SpeedSetting[] = [0, 1, 2, 4];
     this.speedBtns.forEach((b, i) => b.classList.toggle('active', speeds[i] === this.c.speed));
