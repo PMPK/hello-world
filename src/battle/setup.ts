@@ -2,6 +2,7 @@ import { dist } from '../core/math';
 import { hourOfDay } from '../core/time';
 import { BUILDINGS } from '../data/buildings';
 import { defenseStatsOf } from '../units/defense';
+import { researchMultiplier } from '../research/research';
 import { FACTION_DEFS } from '../data/factions';
 import type { CampaignState, PendingBattle, UnitInstance } from '../campaign/types';
 import { BIOME_NAMES, biomeAt } from '../world/terrain';
@@ -143,6 +144,7 @@ export function createBattleSetup(state: CampaignState, world: World, p: Pending
       state: b.state,
       crew,
       ammo,
+      damageTaken: ds ? researchMultiplier(state.factions[b.factionId]?.research, 'defense') : undefined,
     });
   }
 

@@ -1,5 +1,5 @@
 // Dev helper: run auto-resolved battles between custom forces for balance checks.
-// Usage: npx tsx scripts/sim-battle.ts
+// Usage: npx tsx scripts/sim-battle.ts   (ONLY=<label substring> runs matching lines only)
 import { createCampaign } from '../src/campaign/newCampaign';
 import { makeContext } from '../src/campaign/context';
 import { createArmy } from '../src/campaign/armies';
@@ -13,6 +13,8 @@ import type { PendingBattle } from '../src/campaign/types';
 
 const { state, world } = createCampaign(4242);
 const ctx = makeContext(state, world);
+// fight at noon so the matrix measures the units, not the light (campaign starts at 06:00)
+state.time = Number(process.env.HOUR_OFFSET ?? 6);
 const [pf, ef] = Object.keys(state.factions);
 const pBase = basesOf(state, pf)[0];
 
@@ -40,6 +42,7 @@ function fortify(bunkers: number, ats: number): string[] {
 }
 
 function run(label: string, a: Record<string, number>, b: Record<string, number>, kind: 'field' | 'base_assault', trials = 6, flip = 1, forts?: [number, number]) {
+  if (process.env.ONLY && !label.includes(process.env.ONLY)) return;
   const fortIds = forts ? fortify(forts[0], forts[1]) : [];
   let wins = [0, 0, 0];
   let dur = 0;
@@ -84,6 +87,9 @@ run('start army FLIPPED', { rifle_squad: 3, recon_jeep: 2, mbt: 1 }, { rifle_squ
 run('mixed 12 vs mixed 12', { rifle_squad: 6, recon_jeep: 3, mbt: 3 }, { rifle_squad: 6, recon_jeep: 3, mbt: 3 }, 'field');
 run('mixed 12 FLIPPED', { rifle_squad: 6, recon_jeep: 3, mbt: 3 }, { rifle_squad: 6, recon_jeep: 3, mbt: 3 }, 'field', 6, -1);
 run('base assault 8 vs garrison 4', { rifle_squad: 4, recon_jeep: 2, mbt: 2 }, { rifle_squad: 3, mbt: 1 }, 'base_assault');
+run('3 ATGM vs 2 tank', { atgm_team: 3 }, { mbt: 2 }, 'field');
+run('3 ATGM vs 4 inf', { atgm_team: 3 }, { rifle_squad: 4 }, 'field');
+run('2 tank + 2 ATGM vs 3 tank', { mbt: 2, atgm_team: 2 }, { mbt: 3 }, 'field');
 run('base assault 8 vs garrison 4 + 2 BNK 1 ATG', { rifle_squad: 4, recon_jeep: 2, mbt: 2 }, { rifle_squad: 3, mbt: 1 }, 'base_assault', 6, 1, [2, 1]);
 run('base assault 8 vs 2 BNK 1 ATG only', { rifle_squad: 4, recon_jeep: 2, mbt: 2 }, {}, 'base_assault', 6, 1, [2, 1]);
 run('6 inf assault vs 2 BNK only', { rifle_squad: 6 }, {}, 'base_assault', 6, 1, [2, 0]);

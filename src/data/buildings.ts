@@ -11,7 +11,8 @@ export type BuildingTypeId =
   | 'barracks'
   | 'vehicle_depot'
   | 'bunker'
-  | 'at_emplacement';
+  | 'at_emplacement'
+  | 'research_lab';
 
 export type SiteKind = 'minerals' | 'hydrocarbons';
 
@@ -49,7 +50,7 @@ export interface BuildingTypeDef {
   name: string;
   short: string;
   description: string;
-  category: 'command' | 'housing' | 'power' | 'extraction' | 'industry' | 'military' | 'defense';
+  category: 'command' | 'housing' | 'power' | 'extraction' | 'industry' | 'military' | 'defense' | 'science';
   cost: PartialStock;
   buildHours: number;
   /** Workers required for full efficiency. */
@@ -71,6 +72,8 @@ export interface BuildingTypeDef {
   extraction?: Record<SiteKind, { resource: 'minerals' | 'hydrocarbons'; perHour: number; name: string }>;
   /** Unit production capability. */
   produces?: 'infantry' | 'vehicles';
+  /** Research points per hour at full efficiency (research labs). */
+  research?: number;
   /** Defensive weapon position (bunkers, gun emplacements). Workers are its crew. */
   defense?: DefenseDef;
   /** Must be placed on a resource site of one of these kinds. */
@@ -278,6 +281,26 @@ export const BUILDINGS: Record<BuildingTypeId, BuildingTypeDef> = {
     maxPerBase: 2,
     importance: 0.9,
     model: 'vehicle_depot',
+  },
+  research_lab: {
+    id: 'research_lab',
+    name: 'Research Lab',
+    short: 'LAB',
+    description:
+      'Field laboratory and workshop. Scientists study the planet and improve the expedition\'s equipment and methods: choose a research project in the lab panel.',
+    category: 'science',
+    cost: { minerals: 60, refined: 50, components: 20 },
+    buildHours: 30,
+    workers: 5,
+    maxHp: 900,
+    energyUse: 6,
+    research: 1,
+    footprint: 1.2,
+    battleFootprint: 15,
+    buildable: true,
+    maxPerBase: 1,
+    importance: 0.65,
+    model: 'research_lab',
   },
   bunker: {
     id: 'bunker',

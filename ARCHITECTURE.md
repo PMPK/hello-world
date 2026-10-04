@@ -50,7 +50,7 @@ src/battle/
   autoresolve.ts            headless BattleSim with AI on both sides
   result.ts                 applyBattleResult(ctx, setup, result) — battle → campaign mapping
 src/characters/character.ts Character / Commander / ArmyCommander / PlayerCharacter (data model)
-src/research/research.ts    research extension points (empty registry)
+src/research/research.ts    TECHS registry, ResearchState (current project + shelved progress), multipliers, unlocks
 src/persistence/            kvstore (IndexedDB → localStorage → memory), save envelope, migrations
 src/rendering/
   renderer.ts               WebGLRenderer + quality profiles + light rig
@@ -138,6 +138,9 @@ Vite production build (`base` = `/<repo>/` on GitHub Actions, `/` locally, `VITE
 - **New unit**: add components to `data/components.ts` and a design to `data/unitDesigns.ts` (`producedAt`).
   For a new chassis visual, add a model and handle it in `BattleView` / `CampaignView.makeArmy`.
 - **New faction**: add a `FactionDef` in `data/factions.ts` and wire it in `newCampaign.ts`.
-- **Research**: add `TechDef`s to `research/research.ts`; gate components/designs with `isUnlocked`.
+- **Research**: add a `TechDef` to `TECHS` in `research/research.ts` (cost, prerequisites, effects).
+  `modifier` effects are read with `researchMultiplier(research, target)` where the simulation applies them
+  (targets: extraction, farm, industry, construction, logistics, defense); `unlock_*` effects gate data via
+  `isUnlocked` (production lists, AI recruitment). Add it to `AI_TECH_ORDER` so the rival researches it.
 - **Player character control**: extend `PlayerCharacterData.controlMode`; the battle sim already exposes
   per-unit orders that a direct-control mode can drive.

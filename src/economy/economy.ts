@@ -11,6 +11,7 @@ import {
 } from '../data/resources';
 import { UNIT_DESIGNS } from '../data/unitDesigns';
 import { difficultyOf } from '../data/difficulty';
+import { addResearchPoints, AI_TECH_ORDER, availableTechs, researchMultiplier, startResearch } from '../research/research';
 import { statsOf } from '../units/stats';
 import { log, newId, type SimContext } from '../campaign/context';
 import { buildingsOfBase } from '../campaign/queries';
@@ -36,6 +37,7 @@ const WORK_PRIORITY: Record<BuildingTypeId, number> = {
   // defences are crewed ahead of industry: an unmanned bunker is useless when the attack comes
   bunker: 2.5,
   at_emplacement: 2.5,
+  research_lab: 7.5,
   extractor: 3,
   refinery: 4,
   factory: 5,
@@ -174,7 +176,14 @@ export function stepBaseEconomy(ctx: SimContext, base: Base, dt: number): void {
   const housing = housingOf(state, base.id);
 
   // difficulty: the rival expedition works faster or slower than the rules say
-  const incomeMul = state.factions[base.factionId]?.isPlayer ? 1 : difficultyOf(state.difficulty).aiIncome;
+  const faction = state.factions[base.factionId];
+  const incomeMul = faction?.isPlayer ? 1 : difficultyOf(state.difficulty).aiIncome;
+  // research bonuses
+  const research = faction?.research;
+  const mConstruction = researchMultiplier(research, 'construction');
+  const mExtraction = researchMultiplier(research, 'extraction');
+  const mFarm = researchMultiplier(research, 'farm');
+  const mIndustry = researchMultiplier(research, 'industry');
 
   // ---- 1. Workforce allocation ----------------------------------------
   let workforce = Math.floor(base.population);
@@ -251,7 +260,7 @@ export function stepBaseEconomy(ctx: SimContext, base: Base, dt: number): void {
       const s = staffing.get(b.id) ?? 0;
       b.status = s > 0 ? 'constructing' : 'no_workers';
       b.efficiency = s;
-      b.buildProgress = Math.min(1, b.buildProgress + (dt * s) / def.buildHours);
+      b.buildProgress = Math.min(1, b.buildProgress + ((dt * s) / def.buildHours) * mConstruction);
       if (b.buildProgress >= 1) {
         b.state = 'active';
         b.hp = def.maxHp;
@@ -310,7 +319,7 @@ export function stepBaseEconomy(ctx: SimContext, base: Base, dt: number): void {
       } else if (held >= EXTRACTOR_BUFFER - 1e-6) {
         b.status = 'storage_full';
       } else {
-        const amount = Math.min(EXTRACTOR_BUFFER - held, ex.perHour * site.richness * eff * dt);
+        const amount = Math.min(EXTRACTOR_BUFFER - held, ex.perHour * site.richness * eff * mExtraction * dt);
         b.storage[ex.resource] = (b.storage[ex.resource] ?? 0) + amount;
         b.status = hpFactor(b) < 1 ? 'damaged' : 'ok';
       }
@@ -319,6 +328,26 @@ export function stepBaseEconomy(ctx: SimContext, base: Base, dt: number): void {
 
     if (def.defense) {
       b.status = s < 1 ? 'no_workers' : hpFactor(b) < 1 ? 'damaged' : 'ok';
+      continue;
+    }
+
+    if (def.research) {
+      if (s <= 0 || !research) {
+        b.status = 'no_workers';
+        continue;
+      }
+      // the AI picks its next project itself; the player is prompted by the idle lab
+      if (!research.current && !faction?.isPlayer) {
+        const next = AI_TECH_ORDER.find((id) => availableTechs(research).some((t) => t.id === id));
+        if (next) startResearch(research, next);
+      }
+      if (!research.current) {
+        b.status = 'idle';
+        continue;
+      }
+      const done = addResearchPoints(research, def.research * eff * dt);
+      b.status = powered < 0.99 ? 'low_power' : s < 1 ? 'no_workers' : hpFactor(b) < 1 ? 'damaged' : 'ok';
+      if (done && faction?.isPlayer) log(state, `Research complete: ${done.name}. ${done.description}`, 'econ', base.factionId);
       continue;
     }
 
@@ -342,7 +371,7 @@ export function stepBaseEconomy(ctx: SimContext, base: Base, dt: number): void {
         b.activeRecipe = null;
         continue;
       }
-      b.cycleProgress += dt * eff;
+      b.cycleProgress += dt * eff * (b.typeId === 'farm' ? mFarm : mIndustry);
       b.status = powered < 0.99 ? 'low_power' : s < 1 ? 'no_workers' : hpFactor(b) < 1 ? 'damaged' : 'ok';
       if (b.cycleProgress >= r.cycleHours) {
         depositToBase(state, base, r.outputs);

@@ -129,6 +129,7 @@ Rules:
 | Vehicle Depot | 80 ORE · 60 ALY · 20 CMP | 48h | 6 | 1800 | −8 MW | builds jeeps and tanks |
 | MG Bunker | 35 ORE · 30 ALY | 16h | 3 crew | 1800 | 0 | twin 12.7 mm MG (215 m), 30 rds, concrete (−60% structural damage) |
 | AT Gun Emplacement | 25 ORE · 35 ALY · 12 CMP | 20h | 4 crew | 1300 | 0 | 90 mm AT gun (285 m, vehicles only), 16 rds, hard to hit, crew exposed |
+| Research Lab | 60 ORE · 50 ALY · 20 CMP | 30h | 5 | 900 | −6 MW | 1 RP/h at full staffing and power; one per base (see 4.9) |
 
 Construction pays the full cost up front; cancelling refunds 75%. Destroyed buildings stay as ruins and
 can be rebuilt for 60% of the cost. Buildings below 50% HP work at reduced efficiency; *Repair* consumes
@@ -169,12 +170,13 @@ armour, weapons, sensors, electronics. All stats are derived (`src/units/stats.t
 | Recon Jeep | 3 | 16 ALY · 8 CMP · 10 FUEL · 4 AMMO | 13h | 200 | 4 | 16.5 | 9.5 | 320 | 12.7 mm HMG (175 m) | 20 | 16 |
 | Main Battle Tank | 3 | 48 ALY · 32 CMP · 25 FUEL · 10 AMMO | 47h | 900 | 520 | 7.1 | 4.7 | 190 | 120 mm gun (270 m), coax MG (170 m) | 60 | 24 |
 | Supply Truck | 2 | ALY · CMP · 60 FUEL · 30 AMMO (cargo) | ~14h | 220 | 0 | ~10 | ~6.3 | 150 | none | 140 (25 own reserve) | 60 cargo |
+| ATGM Team *(research)* | 4 | 7 ALY · 9 CMP · 10 AMMO | 10h | 160 | 0 | 3.1 | 4.5 | 230 | rifles/LMG (160 m), guided AT missiles (300 m, vehicles only, 1 per 13 s) | — | 16 |
 
 Roles: infantry are cheap in materials but expensive in people, see well, hide in forests, and kill tanks
 from the flank; jeeps scout and shred infantry in the open but die to anything heavy; tanks dominate open
 ground and other vehicles but are half-blind and vulnerable to infantry in cover and from the sides/rear;
 supply trucks (family `support`, no weapons, combat power 0) carry the task force's fuel, ammunition and
-extra rations.
+extra rations; ATGM teams out-range tank guns from cover but reload slowly and lose to rifle squads.
 
 ### 4.6 Armies (task forces)
 - Formed from a base garrison (*Deploy task force*), up to 24 units. Each has a named **commander**
@@ -183,7 +185,9 @@ extra rations.
   reinforce at a base; split off chosen units into a new task force (rations shared by head count, new
   commander); merge task forces within 2.5 km (up to 24 units; the other commander joins the staff).
 - Strategic fog of war: enemy forces are visible only near your bases, outposts and armies.
-- **Logistics**: near a friendly base units refill from the base stock (trucks load cargo 3× faster).
+- **Logistics**: at a friendly base (inside its perimeter or within 4 km of it) the task force draws rations
+  and units refill from the base stock (trucks load cargo 3× faster); the army panel shows "Supplied by …".
+  In the field it lives on its rations; when they run out you get one warning and infantry slowly weaken.
   Away from bases, supply trucks top up the neediest units (8 FUEL and 4 AMMO per truck-hour), never
   giving away their own 25-fuel reserve; each truck adds 40 rations. The army's fuel range pools truck
   cargo with the vehicles' tanks. Each expedition starts with one truck in its task force; the AI adds
@@ -203,6 +207,26 @@ extra rations.
 - An attack on an outpost: undefended → captured immediately (or destroyed if the attacker has no base);
   defended → outpost battle.
 - The player chooses **Command battle** or **Auto-resolve** (with no friendly units present: outcome only).
+
+### 4.9 Research (`src/research/research.ts`)
+A **Research Lab** produces research points (RP) for its expedition's current project (1 RP/h at full
+staffing, scaled by power and damage like any building). One project at a time; switching keeps the
+progress made (it resumes when picked again). Completed technologies apply immediately to every base.
+
+| Technology | RP | Requires | Effect |
+|---|---|---|---|
+| Deep-Core Drilling | 30 | — | extractors +25% |
+| Hydroponics II | 25 | — | Agri-Domes +30% food |
+| Prefab Construction | 40 | — | construction +35% speed |
+| Automated Lines | 60 | Deep-Core Drilling | refineries and factories +20% speed |
+| Logistics Doctrine | 35 | — | supply trucks transfer 60% faster in the field |
+| Hardened Positions | 45 | Prefab Construction | bunkers and gun emplacements take 25% less damage |
+| ATGM Teams | 70 | Logistics Doctrine | barracks can train ATGM Teams |
+
+The AI builds a lab once its industry stands, after its first bunker when threatened (~day 10–12), and researches in a fixed order
+(economy first, ATGM Teams last), then adds ATGM teams to its forces. Effects are data
+(`TechEffect`: modifier / unlock design / component / building); tech categories for AI, robotics, drones,
+alien technology, cybernetics, consciousness transfer, vehicles and mechs are reserved for later tiers.
 
 ## 5. Tactical layer
 
@@ -233,7 +257,11 @@ Respects fog of war (memory of last-seen enemies). Picks objectives; jeeps scout
 tanks seek high ground at stand-off range and back away from infantry that could carry AT weapons;
 infantry advance through cover and ambush vehicles; a flanking group swings around known enemy
 concentrations; focus fire on the most dangerous / most damaged targets it can hurt; damaged and dry
-units fall back; holds and waits when outmatched; withdraws when the fight is lost. Siege defenders hold
+units fall back; holds and waits when outmatched; withdraws when the fight is lost (it remembers how strong
+the enemy was, so a beaten remnant still pulls out after losing sight of it). When contact is lost it hunts:
+units close in on last-known positions (a spot reached with nothing in sight is written off), then sweep
+the enemy's half of the field and its rear, where damaged vehicles limp to. Missile teams hold in cover at
+~85% of missile range from enemy armour and fight as riflemen when only infantry is around. Siege defenders hold
 around their buildings and counter-attack when clearly superior. Enemy defences are always known: tanks
 shell bunkers (then gun pits), infantry rush exposed AT gun pits that cannot fire back at them, AT-armed
 infantry take on bunkers only when no tanks are left, and jeeps keep clear of fortifications.
@@ -267,7 +295,7 @@ copy it to the clipboard, so campaigns can be backed up or moved between devices
 ## 8. Future systems (architected, not implemented)
 - **Player character** (`src/characters`): Character, Commander, ArmyCommander, PlayerCharacter with a
   `controlMode` for future direct control (soldier, vehicle crew, remote uplink, transferred mind).
-- **Research** (`src/research`): TechDef/TechEffect registry; `isUnlocked()` already consulted for designs.
+- **Research**: tier 1 is in (4.9); further tiers plug into the same `TechDef`/`TechEffect` registry.
 - **Unit designer**: designs are data; new chassis/engines/weapons/AI cores slot into the component model.
 - Real physical logistics (convoys already exist), multiple bases per faction (supported by the data model),
   aliens, Earth war events, mechs.

@@ -2,6 +2,7 @@ import { CAMPAIGN_HOURS_PER_SECOND, hourOfDay, type SpeedSetting } from '../core
 import { dist } from '../core/math';
 import { BUILDINGS, type BuildingTypeId } from '../data/buildings';
 import { FACTION_DEFS } from '../data/factions';
+import { startResearch } from '../research/research';
 import { canFoundFrom, foundBase, MAX_FOUND_RANGE, MIN_BASE_SPACING, validateBaseSite } from '../campaign/expansion';
 import { BASE_RADIUS } from '../world/mapgen';
 import { statsOf } from '../units/stats';
@@ -123,6 +124,16 @@ export class CampaignMode implements Mode, CampaignController {
     }
     this.hud.toast(`${from} merged into ${this.state.armies[intoId]?.name ?? 'the task force'}.`, 'econ');
     this.select({ kind: 'army', id: intoId });
+  }
+
+  setResearch(techId: string): void {
+    const research = this.state.factions[this.state.playerFactionId]?.research;
+    if (!research || !startResearch(research, techId)) {
+      this.hud.toast('That project is not available yet.', 'warn');
+      return;
+    }
+    this.sound('confirm');
+    this.hud.update(true);
   }
 
   setRepeat(buildingId: string, designId: string | null): void {

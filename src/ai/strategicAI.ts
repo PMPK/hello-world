@@ -29,6 +29,7 @@ import {
   strengthOf,
 } from '../campaign/queries';
 import { difficultyOf } from '../data/difficulty';
+import { isUnlocked } from '../research/research';
 import type { AIState, Army, Base, CampaignState } from '../campaign/types';
 
 const THINK_INTERVAL = 1.5;
@@ -193,8 +194,11 @@ function thinkEconomy(ctx: SimContext, ai: AIState, base: Base): void {
   const industry = count(state, base, 'refinery') > 0 && count(state, base, 'factory') > 0;
   const bunkers = count(state, base, 'bunker');
   const atGuns = count(state, base, 'at_emplacement');
+  const hasLab = Object.values(state.buildings).some((b) => b.factionId === base.factionId && b.typeId === 'research_lab');
 
-  type Step = { type: BuildingTypeId | 'mine' | 'well'; when: boolean; blocking?: boolean };
+  // the plan normally keeps a fifth of the people spare for construction crews; the lab may use them
+  const spareForLab = Math.floor(base.population) - plannedWorkers(state, base) >= BUILDINGS.research_lab.workers;
+  type Step = { type: BuildingTypeId | 'mine' | 'well'; when: boolean; blocking?: boolean; staffed?: boolean };
   const plan: Step[] = [
     // a young base first secures an income of ore
     { type: 'mine', when: mineralSites < 1 && count(state, base, 'refinery') < 1, blocking: true },
@@ -207,8 +211,11 @@ function thinkEconomy(ctx: SimContext, ai: AIState, base: Base): void {
     { type: 'vehicle_depot', when: count(state, base, 'vehicle_depot') < 1, blocking: true },
     { type: 'mine', when: mineralSites < 2 },
     { type: 'barracks', when: count(state, base, 'barracks') < 1, blocking: true },
-    { type: 'bunker', when: industry && threatened && bunkers < 1 },
+    // under threat the first bunker is worth saving up for
+    { type: 'bunker', when: industry && threatened && bunkers < 1, blocking: true },
     { type: 'at_emplacement', when: industry && threatened && atGuns < 1 && bunkers >= 1 },
+    // one lab per expedition: its research benefits every base
+    { type: 'research_lab', when: industry && !hasLab && (!threatened || bunkers > 0) && count(state, base, 'vehicle_depot') > 0 && state.time > 24 * 5, staffed: spareForLab },
     { type: 'habitat', when: base.population >= housing - 8 },
     { type: 'well', when: hydroSites < 2 },
     { type: 'mine', when: mineralSites < 3 },
@@ -224,7 +231,7 @@ function thinkEconomy(ctx: SimContext, ai: AIState, base: Base): void {
     const workerCost =
       step.type === 'mine' || step.type === 'well' ? BUILDINGS.extractor.workers : BUILDINGS[step.type].workers;
     // Don't build what we cannot staff (housing and food are always allowed).
-    if (step.type !== 'habitat' && !(step.type === 'farm' && foodNet < 0.2) && workerCost > workersFree + 2) continue;
+    if (step.type !== 'habitat' && !(step.type === 'farm' && foodNet < 0.2) && !step.staffed && workerCost > workersFree + 2) continue;
     let r: TryResult;
     if (step.type === 'mine') r = tryOutpost(ctx, base, 'minerals');
     else if (step.type === 'well') r = tryOutpost(ctx, base, 'hydrocarbons');
@@ -281,10 +288,11 @@ function thinkExpansion(ctx: SimContext, ai: AIState): void {
 // Recruitment
 // ---------------------------------------------------------------------------
 
-function militaryCounts(state: CampaignState, factionId: string): { inf: number; jeep: number; tank: number; truck: number; total: number } {
-  const r = { inf: 0, jeep: 0, tank: 0, truck: 0, total: 0 };
+function militaryCounts(state: CampaignState, factionId: string): { inf: number; jeep: number; tank: number; truck: number; atgm: number; total: number } {
+  const r = { inf: 0, jeep: 0, tank: 0, truck: 0, atgm: 0, total: 0 };
   const add = (designId: string): void => {
     const fam = statsOf(designId).family;
+    if (designId === 'atgm_team') r.atgm++;
     if (fam === 'infantry') r.inf++;
     else if (fam === 'light_vehicle') r.jeep++;
     else if (fam === 'support') r.truck++;
@@ -327,7 +335,10 @@ function thinkRecruitment(ctx: SimContext, ai: AIState, base: Base): void {
     if (b.typeId === 'barracks') {
       const okMaterials = base.stock.refined >= (threatened ? 6 : 35) && base.stock.ammo >= 10;
       if (spare >= 6 && soldiers + 6 <= maxSoldiers && okMaterials && counts.inf < counts.total * 0.6 + 3) {
-        queueUnit(state, b.id, 'rifle_squad');
+        // a third of new infantry are ATGM teams once researched
+        const research = state.factions[ai.factionId]?.research;
+        const atgm = research && isUnlocked(research, 'design', 'atgm_team') && counts.atgm < Math.ceil(counts.inf / 3);
+        queueUnit(state, b.id, atgm ? 'atgm_team' : 'rifle_squad');
       }
     } else if (b.typeId === 'vehicle_depot') {
       if (spare < 3 || soldiers + 3 > maxSoldiers) continue;

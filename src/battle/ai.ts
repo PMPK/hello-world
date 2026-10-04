@@ -17,6 +17,10 @@ interface Memory {
 
 /** Base decision interval (seconds); scaled by difficulty for the rival's commanders. */
 const THINK_INTERVAL = 1.0;
+/** Seconds without sighting an enemy before remembered positions are probed instead of respected. */
+const PROBE_AFTER = 12;
+/** A remembered position is written off once one of our units stands this close to it and sees nothing. */
+const CHECKED_RADIUS = 30;
 
 function isActive(u: BUnit): boolean {
   return u.alive && !u.retreated && !u.reserve;
@@ -63,6 +67,10 @@ export class TacticalAI {
   private holdSince = -1;
   private contactAt = -1;
   private lastContact = -999;
+  /** Strength of the enemy when last seen; kept after contact is lost so a beaten side still withdraws. */
+  private enemyEstimate = 0;
+  private searchPoints: { x: number; z: number }[] = [];
+  private searchIdx = new Map<number, number>();
   private readonly siegeAttacker: boolean;
   private readonly thinkInterval: number;
   private readonly flanking: boolean;
@@ -103,12 +111,13 @@ export class TacticalAI {
     const ownPower = sim.sidePower(this.side);
     const known = [...this.memory.values()];
     const enemyPower = known.reduce((a, m) => a + m.power, 0);
+    if (known.length) this.enemyEstimate = enemyPower;
     const start = sim.startPower[this.side] || 1;
 
     // ---- Withdraw when the fight is clearly lost --------------------------
     const fighters = own.filter((u) => u.stats.weapons.length > 0);
     const allDry = fighters.every((u) => u.ammo < Math.min(...u.stats.weapons.map((w) => w.ammoPerShot)));
-    if (!this.retreating && ((ownPower < start * 0.3 && ownPower < enemyPower * 0.6) || allDry)) {
+    if (!this.retreating && ((ownPower < start * 0.3 && ownPower < this.enemyEstimate * 0.6) || allDry)) {
       this.retreating = true;
     }
     if (this.retreating) {
@@ -200,7 +209,13 @@ export class TacticalAI {
         inForest: false,
       });
     }
-    for (const [id, m] of this.memory) if (sim.time - m.t > 75) this.memory.delete(id);
+    for (const [id, m] of this.memory) {
+      if (sim.time - m.t > 75) this.memory.delete(id);
+      // a spot one of our units has reached without seeing anyone: the enemy has moved on
+      else if (m.family !== 'defense' && sim.time - m.t > 3 && sim.units.some((u) => u.side === this.side && isActive(u) && dist(u.x, u.z, m.x, m.z) < CHECKED_RADIUS)) {
+        this.memory.delete(id);
+      }
+    }
   }
 
   private enemyBuildings(): { x: number; z: number; id: number; importance: number }[] {
@@ -394,6 +409,17 @@ export class TacticalAI {
     const inf = own.filter((u) => u.stats.family === 'infantry');
     const jeeps = own.filter((u) => u.stats.family === 'light_vehicle' && u.task !== 'fall back');
 
+    // ---- Contact lost: hunt for the enemy instead of waiting for it -------------
+    const lost = this.contactAt >= 0 && sim.time - this.lastContact > PROBE_AFTER;
+    if (lost && known.length && known.every((m) => m.family !== 'defense' && sim.time - m.t > PROBE_AFTER)) {
+      this.probe(own, known);
+      return;
+    }
+    if (lost && !known.length && !(this.siegeAttacker && enemyBuildings.length)) {
+      this.sweep(own);
+      return;
+    }
+
     // ---- No contact yet: scout and advance in bounds -----------------------
     if (!known.length) {
       jeeps.forEach((j, k) => {
@@ -440,6 +466,8 @@ export class TacticalAI {
       if (!u || !isActive(u)) this.flankers.delete(id);
     }
     if (!waiting) this.reduceDefenses(own);
+    // missile teams only stand off against armour; against infantry they fight as riflemen
+    const vehicleC = centroid(known.filter((m) => m.vehicle));
 
     for (const u of own) {
       if (u.order.type === 'retreat' || u.task === 'fall back' || u.task === 'rearm') continue;
@@ -454,11 +482,59 @@ export class TacticalAI {
         continue;
       }
       if (u.stats.family === 'tank') this.tankStandoff(u, enemyC!, ux, uz, waiting);
+      else if (u.stats.family === 'infantry' && this.longRangeAT(u) && vehicleC) this.missileStandoff(u, vehicleC);
       else if (u.stats.family === 'infantry') this.infantryAdvance(u, enemyC!, waiting);
       else this.jeepHarass(u, ownC, ux, uz);
     }
 
 
+  }
+
+  /** Close in on the last known enemy positions (spread out) to regain sight of them. */
+  private probe(own: BUnit[], known: Memory[]): void {
+    own.forEach((u, k) => {
+      if (u.order.type === 'retreat' || u.task === 'fall back' || u.task === 'rearm') return;
+      if (u.order.type === 'attack' && this.sim.targetValid(u, u.order.target)) return;
+      let best = known[0];
+      let bd = Infinity;
+      for (const m of known) {
+        const d = dist(u.x, u.z, m.x, m.z);
+        if (d < bd) {
+          bd = d;
+          best = m;
+        }
+      }
+      const a = k * 2.4;
+      this.moveTo(u, best.x + Math.cos(a) * 14, best.z + Math.sin(a) * 14, true, 18);
+      u.task = 'search';
+    });
+  }
+
+  /**
+   * Nothing in sight and nothing remembered: comb the enemy's half of the
+   * field, finishing at its rear where damaged vehicles fall back to. Each
+   * unit walks the waypoints from a different start.
+   */
+  private sweep(own: BUnit[]): void {
+    const sim = this.sim;
+    if (!this.searchPoints.length) {
+      const e = sim.setup.sides[this.enemySide].entry;
+      const px = -e.dirZ;
+      const pz = e.dirX;
+      for (const ahead of [150, 60, -40]) {
+        for (const lateral of [0, 110, -110]) this.searchPoints.push(sim.freeSpot(e.x + e.dirX * ahead + px * lateral, e.z + e.dirZ * ahead + pz * lateral));
+      }
+    }
+    const pts = this.searchPoints;
+    own.forEach((u, k) => {
+      if (u.order.type === 'retreat' || u.task === 'fall back' || u.task === 'rearm') return;
+      if (u.order.type === 'attack' && sim.targetValid(u, u.order.target)) return;
+      let i = this.searchIdx.get(u.id) ?? k % pts.length;
+      if (dist(u.x, u.z, pts[i].x, pts[i].z) < CHECKED_RADIUS) i = (i + 1) % pts.length;
+      this.searchIdx.set(u.id, i);
+      this.moveTo(u, pts[i].x, pts[i].z, true, 20);
+      u.task = 'search';
+    });
   }
 
   private pickFlankSide(c: { x: number; z: number }, px: number, pz: number): number {
@@ -518,6 +594,23 @@ export class TacticalAI {
       this.moveTo(u, best.x, best.z, true, 35);
       u.task = 'overwatch';
     }
+  }
+
+  /** Guided-missile teams: AT reach beyond tank guns, but helpless up close. */
+  private longRangeAT(u: BUnit): boolean {
+    return u.stats.weapons.some((w) => w.antiVehicleOnly && w.range >= 250);
+  }
+
+  /** Missile teams hold in cover just inside missile range of the enemy, never closing in. */
+  private missileStandoff(u: BUnit, enemyC: { x: number; z: number }): void {
+    const reach = Math.max(...u.stats.weapons.filter((w) => w.antiVehicleOnly).map((w) => w.range));
+    const want = reach * 0.85;
+    const d = dist(u.x, u.z, enemyC.x, enemyC.z);
+    if (Math.abs(d - want) < 30 && (u.cover > 0 || u.order.type === 'idle')) return;
+    const k = (d - want) / Math.max(d, 1);
+    const goal = this.coverNear(u.x + (enemyC.x - u.x) * k, u.z + (enemyC.z - u.z) * k, 50);
+    this.moveTo(u, goal.x, goal.z, true, 30);
+    u.task = 'overwatch';
   }
 
   /** Infantry advance through cover; they wait in cover when outmatched. */

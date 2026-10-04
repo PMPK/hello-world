@@ -1,6 +1,7 @@
 // Dev helper: run a campaign headless (battles auto-resolved) and print economy/AI stats.
 // Usage: npx tsx scripts/sim-campaign.ts [seed] [days]
 //        PLAYER_ATTACKS=1 npx tsx scripts/sim-campaign.ts 1234 30
+//        BATTLE_DETAIL=1 also prints each battle's forces and outcome
 import { createCampaign } from '../src/campaign/newCampaign';
 import { makeContext } from '../src/campaign/context';
 import { advanceCampaign } from '../src/campaign/sim';
@@ -27,6 +28,10 @@ for (let d = 1; d <= days; d++) {
       const res = autoResolve(setup, world.terrain);
       const sum = applyBattleResult(ctx, setup, res);
       console.log(`  [battle t=${state.time.toFixed(1)} ${setup.kind} @${setup.locationName}] ${sum.title} | ${sum.lines.join(' | ')}`);
+      if (process.env.BATTLE_DETAIL) {
+        setup.sides.forEach((s, k) => console.log(`     side ${k} ${s.factionId}: ${s.units.map((u) => `${u.designId}(hp${Math.round(u.hp)} a${Math.round(u.ammo)} f${Math.round(u.fuel)})`).join(' ')}`));
+        console.log(`     winner=${res.winner} reason=${res.reason} t=${res.durationSeconds.toFixed(0)}s lost=${res.sides.map((s) => `${s.unitsLost}/${s.unitsStart}`).join(' vs ')}`);
+      }
     }
   }
   if (process.env.PLAYER_ATTACKS && d === 3) {
@@ -45,6 +50,10 @@ for (let d = 1; d <= days; d++) {
       console.log(`         ${st}`);
       console.log(`         ${types}`);
     }
+  }
+  for (const f of Object.values(state.factions)) {
+    const r = f.research;
+    if (r && (r.completed.length || r.current)) console.log(`         ${f.id} research: done=[${r.completed.join(',')}] current=${r.current ? `${r.current.techId} ${r.current.progress.toFixed(1)}` : '-'}`);
   }
   const rel = state.relations[0];
   console.log(`         tension=${rel.tension.toFixed(1)} status=${rel.status} convoys=${Object.keys(state.convoys).length}`);

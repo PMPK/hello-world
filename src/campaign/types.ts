@@ -11,7 +11,7 @@ import type { ResearchState } from '../research/research';
  */
 
 /** Bump when the shape of CampaignState changes; add a migration in persistence/migrations.ts. */
-export const STATE_VERSION = 3;
+export const STATE_VERSION = 4;
 
 export interface UnitInstance {
   id: string;

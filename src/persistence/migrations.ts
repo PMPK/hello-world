@@ -17,6 +17,16 @@ export const MIGRATIONS: Record<number, Migration> = {
   },
   // v3: campaign difficulty (old campaigns were balanced as Normal)
   2: (s) => ({ ...s, difficulty: s.difficulty ?? 'normal', version: 3 }),
+  // v4: research keeps progress on projects switched away from
+  3: (s) => {
+    const factions = (s.factions ?? {}) as Record<string, Record<string, unknown>>;
+    const out: Record<string, Record<string, unknown>> = {};
+    for (const [id, f] of Object.entries(factions)) {
+      const r = (f.research ?? { completed: [], current: null }) as Record<string, unknown>;
+      out[id] = { ...f, research: { ...r, shelved: r.shelved ?? {} } };
+    }
+    return { ...s, factions: out, version: 4 };
+  },
 };
 
 export function migrateState(raw: Record<string, unknown>): CampaignState {

@@ -1,14 +1,14 @@
 # CURRENT STATE
 
-*Last updated: post-MVP iteration (supply trucks, defences, battle unit card, async auto-resolve).*
+*Last updated: post-MVP iteration (research, ATGM teams, AI contact hunting, base supply reach).*
 
 ## What works
 
 - **Full gameplay loop**: main menu (live 3D map preview) → intro → strategic map → contact report →
   tactical battle *or* auto-resolve → after-action report → results persisted → campaign continues.
 - **Navigation**: expedition overview (all bases with shortage warnings and all task forces with orders,
-  composition and fuel range; tap to jump), next-base / next-task-force buttons, event log; 9-step
-  directive tutorial (economy → military → fortify → expand).
+  composition and fuel range; tap to jump), next-base / next-task-force buttons, event log; 10-step
+  directive tutorial (economy → military → research → fortify → expand).
 - **Strategic map**: seeded continent (plains, forests, hills, mountains, coasts, lakes), two expeditions,
   resource sites, roads, bases with real building models, army tokens with banners, convoy trucks,
   perimeter rings, NATO-style symbols and labels, strategic fog of war, pan/zoom/rotate (touch + mouse + keys).
@@ -18,15 +18,20 @@
 - **Economy**: workforce allocation, power grid with fuel-burning plants, storage caps, recipes with
   Auto/fixed modes and stock targets, extractor outposts with buffers and convoys, food and population
   growth, Earth supply shuttles, garrison resupply/replacements/field repairs, building repair/rebuild.
-- **Construction**: 10 buildable types with placement preview (valid/invalid ghost), cancel/refund,
+- **Construction**: 11 buildable types with placement preview (valid/invalid ghost), cancel/refund,
   outposts on resource sites with automatic roads.
 - **Defences**: MG bunker and AT gun emplacement — crewed from the workforce, supplied from base AMMO,
   fight on their own in any battle at their base (traversing AT gun, armour/profile/crew exposure),
   lose crew when hit or destroyed; counted in base strength; the AI fortifies when tension rises.
-- **Units**: rifle squads, recon jeeps, main battle tanks and supply trucks derived from modular components;
+- **Research**: Research Lab (one per base, 1 RP/h) works on one project at a time; seven tier-1
+  technologies (extraction, food, construction, industry, logistics, hardened defences, ATGM Teams) with
+  prerequisites; switching projects keeps progress; tech descriptions shown on the lab panel's buttons.
+  The AI builds a lab once its industry stands (after its first bunker when threatened) and researches the whole tier.
+- **Units**: rifle squads, ATGM teams (research), recon jeeps, main battle tanks and supply trucks derived from modular components;
   production consumes people + materials, with **continuous production** (repeat a design); garrison →
   task force deployment; garrison/reinforce at bases; **split** a task force and **merge** nearby ones.
-- **Armies**: pathfinding on terrain/roads, rations, fuel consumption, resupply near bases, attack/pursuit,
+- **Armies**: pathfinding on terrain/roads, rations, fuel consumption, resupply at bases (inside the
+  perimeter or within 4 km; "Supplied by …" in the army panel; a warning when rations run out), attack/pursuit,
   return; named commanders. **Supply trucks** keep task forces fuelled and armed in the field (pooled fuel
   range, extra rations, cargo shown in the army panel) and rearm nearby units in battle.
 - **Diplomacy**: standoff with rising tension → AI goes weapons-free at 100%; player attacks start hostilities.
@@ -39,7 +44,9 @@
   follow camera (V) and clear selection.
 - **Tactical AI**: memory under fog, recon, tank stand-off/high ground, infantry cover & AT ambushes,
   flanking group, focus fire, fallback, wait-when-outmatched, withdrawal; siege defence; reduces enemy
-  fortifications with the right arm (tanks vs bunkers, infantry vs AT gun pits).
+  fortifications with the right arm (tanks vs bunkers, infantry vs AT gun pits); missile teams stand off
+  against armour; when contact is lost it probes last-known positions and sweeps the enemy's rear, and a
+  beaten remnant withdraws even out of sight (no more stalled draws against a hidden, crippled tank).
 - **Strategic AI**: needs-based build order, staffing/manpower-aware recruitment, raids on outposts,
   base assaults, defence recalls, fuel/readiness checks, refits after defeats; **strategic fog of war**
   (it only targets and reacts to player forces it can see).
@@ -59,10 +66,11 @@
   acknowledgements, radio chirps for reports, contact alarm, wind ambience; Sound Off/Low/Medium/High in
   settings, M to mute.
 - **Auto-resolve** runs in time slices with a progress dialog (no main-thread freeze on phones).
-- **Tests**: 65 Vitest unit tests; Playwright smoke tests on phone-landscape touch and desktop mouse profiles
+- **Tests**: 73 Vitest unit tests; Playwright smoke tests on phone-landscape touch and desktop mouse profiles
   (full loop incl. unit card, save/continue, save-slot listing and import; fortified base assault;
   task force split/merge; founding a base).
-- **Save schema v3** (Building.repeat in v2, CampaignState.difficulty in v3) with migrations from v1.
+- **Save schema v4** (Building.repeat in v2, CampaignState.difficulty in v3, research shelf in v4) with
+  migrations from v1.
 - **Deployment**: GitHub Actions CI + Pages deploy workflow (gh-pages branch). A single-file build is also
   published as a claude.ai Artifact (https://claude.ai/artifact/7qGUMq5vWjnaNKRHEyempW).
 
@@ -97,9 +105,14 @@
 
 ## Unfinished systems (extension points only)
 
-- Research/technology (`src/research/research.ts` registry is empty).
+- Research beyond tier 1 (AI, robotics, drones, alien technology… categories reserved in `src/research`).
 - Unit designer (component model ready, no UI).
 - Player character direct control (data model in `src/characters/`).
+
+## Dev tools
+`npm run sim:campaign -- <seed> <days>` (`BATTLE_DETAIL=1` prints each battle's forces; research progress
+is listed per day), `npm run sim:battle` (`ONLY=<label>` filters matrix lines), `npm run sim:trace --
+'{"mbt":2}' '{"rifle_squad":4}' [seed]` traces one AI-vs-AI field battle (positions, orders, tasks, shots).
 
 ## Best next tasks
 

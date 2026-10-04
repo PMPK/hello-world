@@ -63,6 +63,8 @@ export interface BattleBuildingSpec {
   crew?: number;
   /** Defensive structures: rounds drawn from the base stock for this battle. */
   ammo?: number;
+  /** Defensive structures: damage multiplier from research (1 = none). */
+  damageTaken?: number;
 }
 
 /** Everything needed to (re)create a battle. Plain JSON. */

@@ -2,6 +2,7 @@ import { dist, type Vec2 } from '../core/math';
 import { FACTION_DEFS } from '../data/factions';
 import { FOOD_PER_PERSON_HOUR, resupplyUnits } from '../economy/economy';
 import { statsOf } from '../units/stats';
+import { researchMultiplier } from '../research/research';
 import type { Character } from '../characters/character';
 import { log, newId, type SimContext } from './context';
 import { nearestBaseOf } from './queries';
@@ -89,11 +90,11 @@ function takeFromTrucks(trucks: UnitInstance[], kind: 'fuel' | 'ammo', amount: n
 }
 
 /** Supply trucks top up the rest of their task force, neediest units first. */
-export function fieldResupply(units: UnitInstance[], dt: number): void {
+export function fieldResupply(units: UnitInstance[], dt: number, rateMul = 1): void {
   const trucks = units.filter((u) => isSupport(u.designId));
   if (!trucks.length) return;
   for (const kind of ['fuel', 'ammo'] as const) {
-    let budget = trucks.length * (kind === 'fuel' ? FIELD_FUEL_RATE : FIELD_AMMO_RATE) * dt;
+    let budget = trucks.length * (kind === 'fuel' ? FIELD_FUEL_RATE : FIELD_AMMO_RATE) * rateMul * dt;
     const needy = units
       .filter((u) => !isSupport(u.designId))
       .map((u) => {
@@ -405,9 +406,13 @@ export function retreatArmy(ctx: SimContext, army: Army, fromX: number, fromZ: n
   orderReturn(ctx, army.id);
 }
 
-function friendlyBaseNear(state: CampaignState, a: Army): Base | null {
+/** How far outside a base's perimeter (km) a task force still draws supplies from it. */
+export const SUPPLY_MARGIN = 4;
+
+/** The friendly base keeping this task force supplied, if it is camped at one. */
+export function supplyingBase(state: CampaignState, a: Army): Base | null {
   for (const b of Object.values(state.bases)) {
-    if (b.factionId === a.factionId && dist(b.x, b.z, a.x, a.z) <= b.radius + 2) return b;
+    if (b.factionId === a.factionId && dist(b.x, b.z, a.x, a.z) <= b.radius + SUPPLY_MARGIN) return b;
   }
   return null;
 }
@@ -482,7 +487,7 @@ export function stepArmies(ctx: SimContext, dt: number): void {
     }
 
     // --- supply ---
-    const home = friendlyBaseNear(state, army);
+    const home = supplyingBase(state, army);
     if (home) {
       resupplyUnits(home, army.units, dt, false);
       const want = maxRations(army) - army.food;
@@ -492,11 +497,14 @@ export function stepArmies(ctx: SimContext, dt: number): void {
         home.stock.food -= take;
       }
     } else {
-      fieldResupply(army.units, dt);
+      fieldResupply(army.units, dt, researchMultiplier(state.factions[army.factionId]?.research, 'logistics'));
       const eat = armyMen(army) * FOOD_PER_PERSON_HOUR * dt;
       if (army.food >= eat) {
         army.food -= eat;
       } else {
+        if (army.food > 0 && state.factions[army.factionId]?.isPlayer) {
+          log(state, `${army.name} has run out of rations. Infantry will weaken until the force is back at a base.`, 'warn', army.factionId);
+        }
         army.food = 0;
         // hunger attrition: infantry slowly lose strength
         for (const u of army.units) {

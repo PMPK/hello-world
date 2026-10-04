@@ -65,6 +65,18 @@ export const UNIT_DESIGNS: Record<string, UnitDesign> = {
     producedAt: 'vehicle_depot',
     extraCost: { fuel: 25, ammo: 10 },
   },
+  atgm_team: {
+    id: 'atgm_team',
+    name: 'ATGM Team',
+    short: 'ATGM',
+    description:
+      'Four soldiers with a guided anti-tank missile launcher and personal weapons. Out-ranges tank guns; slow to reload and helpless against infantry at close range. Requires the ATGM Teams research.',
+    chassis: 'weapons_team',
+    weapons: ['assault_rifles', 'atgm'],
+    sensors: ['binoculars'],
+    producedAt: 'barracks',
+    extraCost: { ammo: 10 },
+  },
   supply_truck: {
     id: 'supply_truck',
     name: 'Supply Truck',
@@ -81,4 +93,4 @@ export const UNIT_DESIGNS: Record<string, UnitDesign> = {
   },
 };
 
-export const DESIGN_ORDER = ['rifle_squad', 'recon_jeep', 'mbt', 'supply_truck'];
+export const DESIGN_ORDER = ['rifle_squad', 'atgm_team', 'recon_jeep', 'mbt', 'supply_truck'];

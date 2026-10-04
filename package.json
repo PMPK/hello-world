@@ -17,6 +17,7 @@
     "icons": "node scripts/generate-icons.mjs",
     "sim:campaign": "tsx scripts/sim-campaign.ts",
     "sim:battle": "tsx scripts/sim-battle.ts",
+    "sim:trace": "tsx scripts/trace-battle.ts",
     "check": "npm run typecheck && npm run test && npm run build",
     "build:artifact": "VITE_TARGET=artifact vite build && node scripts/build-artifact.mjs dist-artifact/planet-x.html"
   },

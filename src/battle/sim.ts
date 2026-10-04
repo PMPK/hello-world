@@ -1090,7 +1090,7 @@ export class BattleSim {
       if (!hit) return;
       const b = this.buildingById(t.id)!;
       const fort = BUILDINGS[b.spec.typeId].defense;
-      this.damageBuilding(b, w.damage * w.vsStructure * src.menFactor * (1 - (fort?.armor ?? 0)));
+      this.damageBuilding(b, w.damage * w.vsStructure * src.menFactor * (1 - (fort?.armor ?? 0)) * (b.spec.damageTaken ?? 1));
       // hits can kill the crew of a manned position (blast, or small arms through an open gun pit)
       if (fort && b.defense && b.defense.crew > 0 && !b.destroyed) {
         const pKill = heavy ? fort.exposure * 0.5 : w.vsInfantry >= 0.5 ? (fort.exposure * w.damage * w.vsInfantry * src.menFactor) / 60 : 0;

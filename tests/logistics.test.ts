@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { armySupplies, createArmy, fieldResupply, fuelRange, maxRations, TRUCK_FUEL_RESERVE } from '../src/campaign/armies';
+import { armySupplies, createArmy, fieldResupply, fuelRange, maxRations, stepArmies, supplyingBase, TRUCK_FUEL_RESERVE } from '../src/campaign/armies';
+import { armiesOf } from '../src/campaign/queries';
 import type { PendingBattle } from '../src/campaign/types';
 import { createUnit } from '../src/campaign/units';
 import { resupplyUnits } from '../src/economy/economy';
@@ -108,5 +109,30 @@ describe('supply trucks in battle', () => {
     for (let i = 0; i < 4 && !sim.finished; i++) sim.step(0.5);
     expect(sim.finished).toBe(true);
     expect(sim.winner).toBe(0);
+  });
+});
+
+describe('base supply', () => {
+  it('keeps the starting task force fed where it is parked outside the perimeter', () => {
+    const c = freshCampaign();
+    const army = armiesOf(c.state, c.player)[0];
+    expect(supplyingBase(c.state, army)?.id).toBe(c.pBase.id);
+    army.food = 0;
+    for (let h = 0; h < 48; h++) stepArmies(c, 1);
+    expect(army.food).toBeGreaterThan(0);
+    for (const u of army.units) expect(u.hp).toBe(statsOf(u.designId).maxHp);
+  });
+
+  it('starves infantry in the field once rations run out, with one warning', () => {
+    const c = freshCampaign();
+    const squad = createUnit(c.state, 'rifle_squad');
+    const army = createArmy(c, c.player, c.pBase.x + 60, c.pBase.z + 60, [squad], null);
+    expect(supplyingBase(c.state, army)).toBeNull();
+    army.food = 0.01;
+    const logBefore = c.state.log.length;
+    for (let h = 0; h < 10; h++) stepArmies(c, 1);
+    expect(squad.hp).toBeLessThan(statsOf('rifle_squad').maxHp);
+    const warnings = c.state.log.slice(logBefore).filter((e) => e.text.includes('run out of rations'));
+    expect(warnings.length).toBe(1);
   });
 });

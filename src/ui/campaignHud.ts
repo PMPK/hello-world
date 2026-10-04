@@ -4,7 +4,7 @@ import { RESOURCES, STOCK_RESOURCES, canAfford, formatCost, type PartialStock } 
 import { UNIT_DESIGNS } from '../data/unitDesigns';
 import { campaignDay, formatCampaignTime, formatDuration, type SpeedSetting } from '../core/time';
 import { dist } from '../core/math';
-import { ARMY_MAX_UNITS, armyBaseSpeed, armyMen, armySupplies, fuelRange, maxRations, MERGE_RANGE } from '../campaign/armies';
+import { ARMY_MAX_UNITS, armyBaseSpeed, armyMen, armySupplies, fuelRange, maxRations, MERGE_RANGE, supplyingBase } from '../campaign/armies';
 import { canBuildOutpost, canBuildType, OUTPOST_RANGE } from '../campaign/construction';
 import { canFoundFrom, FOUND_COLONISTS, FOUND_COST, MAX_FOUND_RANGE, MIN_BASE_SPACING } from '../campaign/expansion';
 import { affordability, designsFor, MAX_QUEUE } from '../campaign/production';
@@ -13,6 +13,7 @@ import type { Army, Base, Building, BuildingStatus, CampaignState, LogEntry, Pen
 import { FOOD_PER_PERSON_HOUR } from '../economy/economy';
 import { statsOf } from '../units/stats';
 import { defenseStatsOf } from '../units/defense';
+import { availableTechs, TECHS } from '../research/research';
 import { bar, btn, clear, el, fmt, ICONS, iconBtn, signed } from './dom';
 import { openModal, Toasts } from './screens';
 
@@ -41,6 +42,7 @@ export interface CampaignController {
   armySplit(id: string, unitIds: string[]): void;
   armyMerge(intoId: string, fromId: string): void;
   setRepeat(buildingId: string, designId: string | null): void;
+  setResearch(techId: string): void;
   deployGarrison(baseId: string): void;
   beginPlacement(baseId: string, typeId: BuildingTypeId): void;
   beginBaseFounding(fromBaseId: string): void;
@@ -303,6 +305,7 @@ export class CampaignHud {
       if (e.energyProduced + 0.01 < e.energyDemand) warn.push('power');
       if (e.workersEmployed < e.workersNeeded) warn.push('workers');
       if (b.stock.ammo < 15) warn.push('ammo');
+      if (Object.values(s.buildings).some((x) => x.baseId === b.id && x.typeId === 'research_lab' && x.status === 'idle')) warn.push('research (lab idle)');
       const hqBuilding = Object.values(s.buildings).some((x) => x.baseId === b.id && x.typeId === 'hq' && x.state === 'construction');
       const row = el(
         'div',
@@ -382,6 +385,10 @@ export class CampaignHud {
       [has('power_plant'), 'Build a Power Plant before the grid overloads.'],
       [has('factory'), 'Build an Industrial Factory for components and ammunition.'],
       [has('vehicle_depot'), 'Build a Vehicle Depot to produce jeeps and tanks.'],
+      [
+        has('research_lab') && !!(s.factions[pf]?.research.current || s.factions[pf]?.research.completed.length),
+        'Build a Research Lab and choose a research project in its panel.',
+      ],
       [units.filter((u) => u.designId === 'mbt').length >= 2, 'Produce a second Main Battle Tank at the Vehicle Depot.'],
       [has('bunker') || has('at_emplacement'), 'Fortify: build an MG Bunker or AT Gun on the side facing the rival.'],
       [basesOf(s, pf).length >= 2, 'Expand: found a second base near unclaimed resources (base panel → Found new base).'],
@@ -674,12 +681,15 @@ export class CampaignHud {
     const days = a.food / Math.max(0.001, armyMen(a) * FOOD_PER_PERSON_HOUR * 24);
     const range = fuelRange(a.units);
     const supplies = armySupplies(a.units);
+    const supplier = supplyingBase(s, a);
     const sec = this.section(body, 'Status');
     const statusRows: [string, string, string?][] = [
       ['Orders', order, o.type === 'idle' ? 'muted' : 'accent'],
       ['Units / men', `${a.units.length} / ${armyMen(a)}`],
       ['Speed', `${armyBaseSpeed(a).toFixed(1)} km/h`],
-      ['Rations', `${days.toFixed(1)} days`, days < 1 ? 'bad' : days < 2 ? 'warn' : ''],
+      supplier
+        ? ['Rations', `Supplied by ${supplier.name}`, 'ok']
+        : ['Rations', `${days.toFixed(1)} days`, days < 1 ? 'bad' : days < 2 ? 'warn' : ''],
       ['Fuel range', Number.isFinite(range) ? `${Math.floor(range)} km` : 'on foot', range < 40 ? 'bad' : range < 90 ? 'warn' : ''],
     ];
     if (supplies.trucks > 0) {
@@ -939,6 +949,39 @@ export class CampaignHud {
             ),
           );
           if (active) r.append(bar(x.cycleProgress / rr.cycleHours, 'ok'));
+        }
+      }
+      if (def.research) {
+        const research = s.factions[x.factionId]?.research;
+        if (research) {
+          const r = this.section(body, 'Research', `${def.research * (x.efficiency ?? 0) > 0 ? (def.research * (x.efficiency ?? 0)).toFixed(1) : '0'} RP/h`);
+          const cur = research.current ? TECHS[research.current.techId] : null;
+          if (cur) {
+            r.append(el('div', { class: 'name accent', text: cur.name }), bar(research.current!.progress / cur.cost, 'ok'));
+            r.append(el('div', { class: 'hint', text: `${Math.floor(research.current!.progress)} / ${cur.cost} RP · ${cur.description}` }));
+          } else {
+            r.append(el('div', { class: 'hint warn', text: 'No project selected — the lab is idle. Choose one below.' }));
+          }
+          const avail = availableTechs(research).filter((t) => t.id !== research.current?.techId);
+          for (const t of avail) {
+            const kept = research.shelved?.[t.id] ?? 0;
+            const tb = btn('', () => this.c.setResearch(t.id), 'small tech-btn');
+            tb.dataset.testid = `research-${t.id}`;
+            tb.append(
+              el(
+                'div',
+                'tech-head',
+                el('span', { class: 'tech-name', text: t.name }),
+                el('span', { class: 'mono tech-cost', text: kept > 0 ? `${Math.floor(kept)} / ${t.cost} RP` : `${t.cost} RP` }),
+              ),
+              el('div', { class: 'tech-desc', text: t.description }),
+            );
+            r.append(tb);
+          }
+          if (research.current && avail.length) r.append(el('div', { class: 'hint', text: 'Switching projects keeps the progress made so far; it resumes when picked again.' }));
+          if (research.completed.length) {
+            r.append(el('div', { class: 'hint', text: `Completed: ${research.completed.map((id) => TECHS[id]?.name ?? id).join(', ')}` }));
+          }
         }
       }
       const ds = defenseStatsOf(x.typeId);

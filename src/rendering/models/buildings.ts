@@ -224,6 +224,25 @@ function vehicleDepot(b: ModelBuilder, accent: THREE.ColorRepresentation): void 
   b.tube(1.6, 7, 10, WHITE, { x: 15, y: 1.9, z: -3.5 });
 }
 
+function researchLab(b: ModelBuilder, accent: THREE.ColorRepresentation): void {
+  b.box(28, 0.3, 22, PAD);
+  // main lab block with a clean-room annex
+  b.box(16, 5, 10, WHITE, { x: -3, y: 0.3 });
+  b.box(16.3, 0.9, 10.3, WINDOW, { x: -3, y: 2.9 });
+  b.box(16.4, 0.5, 10.4, accent, { x: -3, y: 5.2 });
+  b.box(7, 3.5, 7, 0xb9bdb8, { x: 8, y: 0.3, z: 2 });
+  // observatory dome on the roof
+  b.cyl(3.2, 3.2, 1.2, 12, CONCRETE, { x: -6, y: 5.3 });
+  b.dome(3.1, 12, 0xdfe3e6, { x: -6, y: 6.5 });
+  b.box(0.8, 2.2, 3.4, DARK, { x: -6, y: 7.2, z: 1.2, rx: -0.5 });
+  // sensor mast and dish
+  b.cyl(0.2, 0.28, 12, 5, METAL, { x: 3, y: 5.3, z: -3 });
+  b.cone(1.8, 0.8, 10, WHITE, { x: 3, y: 15.5, z: -3, rx: Math.PI * 0.7 });
+  // sample silos and solar field
+  for (const z of [-7, -4]) b.cyl(1.1, 1.1, 4.5, 8, METAL_D, { x: 11, y: 0.3, z });
+  for (let k = 0; k < 3; k++) b.box(5, 0.2, 3, 0x22344a, { x: -10 + k * 5.5, y: 1.6, z: 8.5, rx: -0.5 });
+}
+
 function bunker(b: ModelBuilder, accent: THREE.ColorRepresentation): void {
   b.box(13, 0.25, 11, EARTH);
   // earth berm around the casemate
@@ -325,6 +344,9 @@ export function buildBuildingModel(typeId: BuildingTypeId, opts: BuildingModelOp
       break;
     case 'bunker':
       bunker(b, a);
+      break;
+    case 'research_lab':
+      researchLab(b, a);
       break;
     case 'at_emplacement':
       atEmplacement(b, a, !opts.noTurret);
