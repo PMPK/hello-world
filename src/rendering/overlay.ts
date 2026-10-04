@@ -36,7 +36,8 @@ export class Overlay {
   }
 
   /** NATO-like symbol: friendly = rectangle, hostile = diamond. */
-  symbol(x: number, y: number, kind: SymbolKind, friendly: boolean, size = 16, opts: { selected?: boolean; alpha?: number; pips?: number } = {}): void {
+  /** `dashed` draws the frame broken (a last known position rather than a live track). */
+  symbol(x: number, y: number, kind: SymbolKind, friendly: boolean, size = 16, opts: { selected?: boolean; alpha?: number; pips?: number; dashed?: boolean } = {}): void {
     const c = this.ctx;
     const col = friendly ? FRIEND : FOE;
     c.save();
@@ -58,7 +59,9 @@ export class Overlay {
       c.closePath();
     }
     c.fill();
+    if (opts.dashed) c.setLineDash([3, 2.5]);
     c.stroke();
+    c.setLineDash([]);
     c.strokeStyle = col;
     c.lineWidth = 1.4;
     const iw = friendly ? w / 2 : h * 0.55;

@@ -11,7 +11,7 @@ import type { ResearchState } from '../research/research';
  */
 
 /** Bump when the shape of CampaignState changes; add a migration in persistence/migrations.ts. */
-export const STATE_VERSION = 8;
+export const STATE_VERSION = 9;
 
 export interface UnitInstance {
   id: string;
@@ -240,6 +240,53 @@ export interface LogEntry {
   text: string;
   kind: 'info' | 'warn' | 'battle' | 'econ' | 'lore';
   factionId?: string;
+  /** Where it happened, for "show me" (intel reports). */
+  at?: { x: number; z: number };
+  /** What it is about: a sighted force (army id) or a reported base (base id). */
+  ref?: { kind: 'army' | 'base'; id: string };
+}
+
+/** What a faction last saw of a rival task force (state v9). */
+export interface ArmySighting {
+  armyId: string;
+  /** Owner of the sighted force. */
+  factionId: string;
+  name: string;
+  x: number;
+  z: number;
+  /** Campaign time of the last fix. */
+  t: number;
+  /** Direction of travel at the last fix (unit vector; 0,0 when stationary). */
+  hx: number;
+  hz: number;
+  /** Observed units by design id. */
+  units: Record<string, number>;
+  men: number;
+  /** In view at the last intel update; otherwise this is a last known position. */
+  inSight: boolean;
+}
+
+/** Latest report on a rival base, taken while it was in view (state v9). */
+export interface BaseReport {
+  baseId: string;
+  factionId: string;
+  t: number;
+  /** Finished, standing structures by type. */
+  structures: Partial<Record<BuildingTypeId, number>>;
+  /** Structures under construction. */
+  underConstruction: number;
+  /** Garrisoned units by design id. */
+  garrison: Record<string, number>;
+  garrisonMen: number;
+  population: number;
+}
+
+/** A faction's knowledge of its rivals (state v9). */
+export interface IntelState {
+  /** Rival task forces in view or recently lost from view, by army id. */
+  armies: Record<string, ArmySighting>;
+  /** Latest report per rival base, by base id. */
+  bases: Record<string, BaseReport>;
 }
 
 export interface CampaignStats {
@@ -269,6 +316,8 @@ export interface CampaignState {
   characters: Record<string, Character>;
   relations: Relation[];
   ai: Record<string, AIState>;
+  /** Per-faction intelligence: sightings and base reports (state v9). */
+  intel: Record<string, IntelState>;
   log: LogEntry[];
   pendingBattle: PendingBattle | null;
   nextEarthFlightAt: number;

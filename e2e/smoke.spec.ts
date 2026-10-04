@@ -387,3 +387,65 @@ test('send a supply run to a task force in the field', async ({ page }) => {
   expect(run!.fuel).toBeGreaterThan(0);
   expect(errors).toEqual([]);
 });
+
+test('intel: a sighting alert jumps to the force, which leaves a last known position', async ({ page }, info) => {
+  const touch = info.project.name.includes('touch');
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto('/');
+  await page.getByTestId('new-campaign').click();
+  await page.getByTestId('intro-skip').click();
+  await expect(page.getByTestId('menu')).toBeVisible();
+  await page.getByTestId('speed-0').click();
+
+  // a rival force comes into view: a contact toast with a Show button
+  const id: string = await px(page, (p) => p.debugSighting());
+  expect(id).toBeTruthy();
+  const toast = page.locator('.toast', { hasText: 'Contact: Recon Debug' });
+  await expect(toast).toBeVisible();
+  await toast.getByRole('button', { name: 'Show' }).click();
+  await expect(page.getByTestId('side-panel')).toContainText('Observed strength');
+  expect(await px(page, (p) => p.app.campaign.selection)).toEqual({ kind: 'army', id });
+
+  // it drives out of view: the panel turns into its last known position
+  await px(page, (p) => {
+    const s = p.state();
+    const a = s.armies[p.app.campaign.selection.id];
+    const rival = Object.values(s.bases as Record<string, any>).find((b: any) => b.factionId !== s.playerFactionId);
+    a.x = rival.x;
+    a.z = rival.z + 12;
+    p.stepIntel();
+  });
+  await expect(page.getByTestId('side-panel')).toContainText('last known position');
+  expect(await px(page, (p) => p.app.campaign.selection)).toEqual({ kind: 'contact', id });
+
+  // the marker on the map is tappable
+  await px(page, (p) => p.app.campaign.select(null));
+  await px(page, (p) => {
+    const s = p.state();
+    const g = Object.values(s.intel[s.playerFactionId].armies as Record<string, any>)[0];
+    p.app.campaign.view.rig.jumpTo(g.x, g.z + 4, 60);
+  });
+  await page.waitForTimeout(300);
+  const screen = await px(page, (p) => {
+    const s = p.state();
+    const g = Object.values(s.intel[s.playerFactionId].armies as Record<string, any>)[0];
+    return p.app.campaign.view.toScreen(g.x, p.app.campaign.view.heightAtWorld(g.x, g.z) + 2, g.z);
+  });
+  expect(screen).not.toBeNull();
+  await tap(page, screen.x, screen.y, touch);
+  expect(await px(page, (p) => p.app.campaign.selection)).toEqual({ kind: 'contact', id });
+
+  // the overview lists the contact, and the rival base has no report yet
+  await page.getByTestId('overview').click();
+  await expect(page.getByTestId('overview-contact')).toContainText('last seen');
+  await page.locator('.modal-back .actions').getByRole('button', { name: 'Close' }).last().click();
+  await expect(page.locator('.modal-back')).toHaveCount(0);
+  await px(page, (p) => {
+    const s = p.state();
+    const rival = Object.values(s.bases as Record<string, any>).find((b: any) => b.factionId !== s.playerFactionId);
+    p.app.campaign.select({ kind: 'base', id: rival.id });
+  });
+  await expect(page.getByTestId('base-intel')).toContainText('NO REPORT');
+  expect(errors).toEqual([]);
+});

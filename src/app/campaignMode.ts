@@ -34,7 +34,8 @@ import { makeContext, syncRng, type SimContext } from '../campaign/context';
 import { cancelOrder, queueUnit } from '../campaign/production';
 import { basesOf, isOutpost, isVisibleToFaction } from '../campaign/queries';
 import { SIM_STEP, stepCampaign } from '../campaign/sim';
-import type { CampaignState } from '../campaign/types';
+import { agoText, SIGHTING_TTL, tally, tallyCount } from '../campaign/intel';
+import type { ArmySighting, CampaignState, LogEntry } from '../campaign/types';
 import type { World } from '../world/world';
 import { createBattleSetup } from '../battle/setup';
 import { autoResolveAsync } from '../battle/autoresolve';
@@ -45,6 +46,24 @@ import type { SymbolKind } from '../rendering/overlay';
 import { PointerInput, type PointerInfo } from '../input/pointer';
 import { CampaignHud, type CampaignController, type Selection } from '../ui/campaignHud';
 import type { App, Mode } from './app';
+
+/** Map symbol for a force from its units by design id. */
+function symbolFor(units: Record<string, number>): SymbolKind {
+  let tank = 0;
+  let inf = 0;
+  let jeep = 0;
+  let support = 0;
+  for (const [id, n] of Object.entries(units)) {
+    const f = statsOf(id).family;
+    if (f === 'tank') tank += n;
+    else if (f === 'infantry') inf += n;
+    else if (f === 'support') support += n;
+    else jeep += n;
+  }
+  return tank && inf ? 'mixed' : tank ? 'tank' : inf ? 'infantry' : jeep ? 'light_vehicle' : support ? 'support' : 'light_vehicle';
+}
+
+const pipsFor = (n: number): number => (n <= 4 ? 1 : n <= 10 ? 2 : 3);
 
 /** Strategic map mode: drives the campaign simulation and its view/HUD. */
 export class CampaignMode implements Mode, CampaignController {
@@ -240,22 +259,10 @@ export class CampaignMode implements Mode, CampaignController {
       if (!this.view.isArmyVisible(a.id)) continue;
       const p = this.view.armyScreenPos(a.id);
       if (!p) continue;
-      let tank = 0;
-      let inf = 0;
-      let jeep = 0;
-      let support = 0;
-      for (const u of a.units) {
-        const f = statsOf(u.designId).family;
-        if (f === 'tank') tank++;
-        else if (f === 'infantry') inf++;
-        else if (f === 'support') support++;
-        else jeep++;
-      }
-      const kind: SymbolKind = tank && inf ? 'mixed' : tank ? 'tank' : inf ? 'infantry' : jeep ? 'light_vehicle' : support ? 'support' : 'light_vehicle';
+      const kind = symbolFor(tally(a.units));
       const friendly = a.factionId === s.playerFactionId;
       const selected = this.selection?.kind === 'army' && this.selection.id === a.id;
-      const pips = a.units.length <= 4 ? 1 : a.units.length <= 10 ? 2 : 3;
-      o.symbol(p.x, p.y, kind, friendly, selected ? 15 : 13, { selected, pips });
+      o.symbol(p.x, p.y, kind, friendly, selected ? 15 : 13, { selected, pips: pipsFor(a.units.length) });
       if (zoomed || selected) o.labelAvoid(p.x, p.y + 17, `${a.name} · ${a.units.length}`, friendly ? '#d8ecff' : '#ffd2c8', 10);
       if (friendly) {
         const range = fuelRange(a.units);
@@ -266,19 +273,42 @@ export class CampaignMode implements Mode, CampaignController {
         if (range < 40) o.label(p.x, p.y - 18, 'LOW FUEL', '#e8c33c', 9);
         else if (dry) o.label(p.x, p.y - 18, 'LOW AMMO', '#e8c33c', 9);
       }
-      void jeep;
+    }
+    // last known positions of rival forces that slipped out of view
+    for (const g of this.lostContacts()) {
+      const p = this.ghostScreen(g);
+      if (!p) continue;
+      const age = s.time - g.t;
+      const selected = this.selection?.kind === 'contact' && this.selection.id === g.armyId;
+      const alpha = selected ? 0.9 : Math.max(0.3, 0.65 - (0.35 * age) / SIGHTING_TTL);
+      o.symbol(p.x, p.y, symbolFor(g.units), false, selected ? 15 : 12, { selected, alpha, dashed: true, pips: pipsFor(tallyCount(g.units)) });
+      o.label(p.x + 14, p.y - 10, '?', `rgba(255,190,170,${alpha})`, 12);
+      if (g.hx || g.hz) {
+        const q = this.view.toScreen(g.x + g.hx * 6, this.view.heightAtWorld(g.x, g.z) + 2, g.z + g.hz * 6);
+        if (q) {
+          const dx = q.x - p.x;
+          const dy = q.y - p.y;
+          const d = Math.hypot(dx, dy) || 1;
+          o.line(p.x + (dx / d) * 14, p.y + (dy / d) * 14, p.x + (dx / d) * 30, p.y + (dy / d) * 30, `rgba(255,106,77,${alpha})`, [4, 3], 1.5);
+        }
+      }
+      if (zoomed || selected) o.labelAvoid(p.x, p.y + 17, `${g.name} · ${agoText(age)}`, `rgba(255,210,200,${Math.min(1, alpha + 0.15)})`, 10);
     }
     // pending order line for the selected army
     const sel = this.selection;
     if (sel?.kind === 'army') {
       const a = s.armies[sel.id];
       if (a && a.order.type !== 'idle' && a.order.type !== 'move' && a.order.type !== 'return' && a.factionId === s.playerFactionId) {
-        const tgt =
+        let tgt: { x: number; z: number } | undefined =
           a.order.type === 'attack_army'
             ? s.armies[a.order.targetId]
             : a.order.type === 'attack_base'
               ? s.bases[a.order.targetId]
               : s.buildings[a.order.targetId];
+        // a pursued force out of view: point at its last known position, not where it really is
+        if (a.order.type === 'attack_army' && tgt && !isVisibleToFaction(s, s.playerFactionId, tgt.x, tgt.z)) {
+          tgt = s.intel[s.playerFactionId]?.armies[a.order.targetId];
+        }
         const p0 = this.view.armyScreenPos(a.id);
         if (tgt && p0) {
           const p1 = this.view.toScreen(tgt.x, this.view.heightAtWorld(tgt.x, tgt.z) + 2, tgt.z);
@@ -289,6 +319,33 @@ export class CampaignMode implements Mode, CampaignController {
         }
       }
     }
+  }
+
+  /** The player's lost contacts: rival forces out of view, at their last known positions. */
+  private lostContacts(): ArmySighting[] {
+    const intel = this.state.intel[this.state.playerFactionId];
+    return intel ? Object.values(intel.armies).filter((g) => !g.inSight) : [];
+  }
+
+  private ghostScreen(g: ArmySighting): { x: number; y: number } | null {
+    return this.view.toScreen(g.x, this.view.heightAtWorld(g.x, g.z) + 2, g.z);
+  }
+
+  /** The last-known-position marker under a screen point, if any. */
+  private ghostAt(sx: number, sy: number, touch: boolean): ArmySighting | null {
+    const reach = touch ? 26 : 16;
+    let best: ArmySighting | null = null;
+    let bestD = reach;
+    for (const g of this.lostContacts()) {
+      const p = this.ghostScreen(g);
+      if (!p) continue;
+      const d = Math.hypot(p.x - sx, p.y - sy);
+      if (d < bestD) {
+        bestD = d;
+        best = g;
+      }
+    }
+    return best;
   }
 
   // ---------------------------------------------------------------------------
@@ -351,6 +408,14 @@ export class CampaignMode implements Mode, CampaignController {
     }
     const pick = this.view.pick(sx, sy, this.state, touch);
     if (!pick) return;
+    // last known positions sit on open ground: they win over a ground or site tap
+    const ghost = pick.kind === 'ground' || pick.kind === 'site' ? this.ghostAt(sx, sy, touch) : null;
+    if (ghost) {
+      const own = touch ? this.ownArmySelected() : null;
+      if (own) this.move(own, ghost.x, ghost.z);
+      else this.select({ kind: 'contact', id: ghost.armyId });
+      return;
+    }
     if (!touch) {
       // Mouse: left button selects/inspects, right button commands (RTS convention).
       if (pick.kind === 'army') this.select({ kind: 'army', id: pick.id! });
@@ -469,21 +534,57 @@ export class CampaignMode implements Mode, CampaignController {
     if (focus && sel) {
       const s = this.state;
       const p =
-        sel.kind === 'army' ? s.armies[sel.id] : sel.kind === 'base' ? s.bases[sel.id] : sel.kind === 'building' ? s.buildings[sel.id] : s.sites[sel.id];
+        sel.kind === 'army'
+          ? s.armies[sel.id]
+          : sel.kind === 'base'
+            ? s.bases[sel.id]
+            : sel.kind === 'building'
+              ? s.buildings[sel.id]
+              : sel.kind === 'contact'
+                ? s.intel[s.playerFactionId]?.armies[sel.id]
+                : s.sites[sel.id];
       if (p) this.view.rig.focus(p.x, p.z + 4, sel.kind === 'base' ? 48 : undefined);
     }
     this.hud.update(true);
+  }
+
+  showLogEntry(e: LogEntry): void {
+    const s = this.state;
+    const ref = e.ref;
+    if (ref?.kind === 'army') {
+      const a = s.armies[ref.id];
+      if (a && isVisibleToFaction(s, s.playerFactionId, a.x, a.z)) {
+        this.select({ kind: 'army', id: a.id }, true);
+        return;
+      }
+      if (s.intel[s.playerFactionId]?.armies[ref.id]) {
+        this.select({ kind: 'contact', id: ref.id }, true);
+        return;
+      }
+    } else if (ref?.kind === 'base' && s.bases[ref.id]) {
+      this.select({ kind: 'base', id: ref.id }, true);
+      return;
+    }
+    if (e.at) this.view.rig.focus(e.at.x, e.at.z + 4);
   }
 
   private validateSelection(): void {
     const s = this.state;
     const sel = this.selection;
     if (!sel) return;
-    const exists =
-      (sel.kind === 'army' && s.armies[sel.id] && (s.armies[sel.id].factionId === s.playerFactionId || isVisibleToFaction(s, s.playerFactionId, s.armies[sel.id].x, s.armies[sel.id].z))) ||
-      (sel.kind === 'base' && s.bases[sel.id]) ||
-      (sel.kind === 'building' && s.buildings[sel.id]) ||
-      (sel.kind === 'site' && s.sites[sel.id]);
+    const pf = s.playerFactionId;
+    if (sel.kind === 'army' || sel.kind === 'contact') {
+      // a rival force out of view becomes its last known position, and back again
+      const a = s.armies[sel.id];
+      const visible = !!a && (a.factionId === pf || isVisibleToFaction(s, pf, a.x, a.z));
+      if (visible) {
+        if (sel.kind === 'contact') this.select({ kind: 'army', id: sel.id });
+      } else if (s.intel[pf]?.armies[sel.id]) {
+        if (sel.kind === 'army') this.select({ kind: 'contact', id: sel.id });
+      } else this.select(null);
+      return;
+    }
+    const exists = (sel.kind === 'base' && s.bases[sel.id]) || (sel.kind === 'building' && s.buildings[sel.id]) || (sel.kind === 'site' && s.sites[sel.id]);
     if (!exists) this.select(null);
   }
 

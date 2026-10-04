@@ -196,7 +196,16 @@ extra rations; ATGM teams out-range tank guns from cover but reload slowly and l
 - Orders: move, attack army (pursuit), attack base, attack outpost (capture), return, stop; garrison /
   reinforce at a base; split off chosen units into a new task force (rations shared by head count, new
   commander); merge task forces within 2.5 km (up to 24 units; the other commander joins the staff).
-- Strategic fog of war: enemy forces are visible only near your bases, outposts and armies.
+- Strategic fog of war: enemy forces are visible only within 34 km of your task forces (bases see ~37 km,
+  extractor outposts ~24 km). Rival base locations are known from the landing; what is inside is not.
+- **Intelligence** (`src/campaign/intel.ts`): a rival force that comes into view is reported ("Contact: Group
+  Sabre (2× TANK · 3× INF) sighted 12 km north-east of …, heading west") with a *Show* button that jumps to
+  it; the same force is reported again only after 8 h out of view (several at once share one report). When
+  it slips out of view a dashed **?** marker keeps its last known position, bearing and strength for 36 h, or
+  until one of your forces gets within 17 km of the spot; tap it to inspect, or with a task force selected to
+  send the force there. Rival bases reveal structures, defences, garrison and population only while in
+  view (first look is logged); afterwards the base panel shows the dated report. The overview lists all
+  contacts. The rival keeps the same records (not yet used by its decisions).
 - **Logistics**: at a friendly base (inside its perimeter or within 4 km of it) the task force draws rations
   and units refill from the base stock (trucks load cargo 3× faster); the army panel shows "Supplied by …".
   In the field it lives on its rations; when they run out you get one warning and infantry slowly weaken.

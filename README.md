@@ -55,7 +55,9 @@ STRATEGIC MAP ──► economy / construction / production / army movement (rea
   enemy AI that scouts, flanks, keeps tanks at standoff, ambushes with infantry, hunts lost contacts and
   retreats when beaten. Auto-resolve runs the same simulation headless (in time slices, no UI freeze).
 - Standoff → hostilities diplomacy (tension), strategic AI (with fog of war and Easy/Normal/Hard difficulty)
-  that builds, researches, fortifies, expands, recruits, raids and attacks.
+  that builds, researches, fortifies, expands, recruits, patrols, raids and attacks.
+- Intelligence under the strategic fog of war: contact reports with a jump-to button, last known positions of
+  forces that slipped out of view, and dated reports on rival bases (defences, garrison) from when they were in sight.
 - Versioned saves in IndexedDB (localStorage fallback), autosave, three manual slots, export/import, continue, reset.
 - Procedural WebAudio sound and a generated ambient score; PWA: manifest, service worker, offline cache,
   fullscreen landscape.

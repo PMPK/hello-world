@@ -20,7 +20,7 @@ buildings); battle results are written back into the persistent campaign.
   persist → strategic map. Read the design docs before changing mechanics.
 - **Save compatibility**: `CampaignState` (`src/campaign/types.ts`) is persisted as JSON. When its shape
   changes, bump `STATE_VERSION` and add a migration in `src/persistence/migrations.ts` plus a test.
-  Never silently break existing saves. (Current schema: v8.)
+  Never silently break existing saves. (Current schema: v9.)
 - **Mobile first**: landscape Android Chrome is the primary target. Touch targets ≥ 42 px, nothing
   hover-only, keep triangle counts and draw calls low (budgets in ARCHITECTURE.md), test the `low`
   quality profile. Desktop also supports mouse + keyboard.
@@ -63,11 +63,12 @@ Write long headless output to a file (`> out.txt`); piped `npx` output is buffer
 | Tactical mode (selection, orders, camera, audio) | `src/app/battleMode.ts` |
 | Campaign state types + `STATE_VERSION` | `src/campaign/types.ts` |
 | New campaign / world rebuild on load | `src/campaign/newCampaign.ts` |
-| Campaign step order (economy → convoys → armies → AI → diplomacy → events → encounters → defeat → relief) | `src/campaign/sim.ts` |
+| Campaign step order (economy → convoys → armies → AI → diplomacy → events → intel → encounters → defeat → relief) | `src/campaign/sim.ts` |
 | Armies: movement, supply, rations, trucks, split/merge | `src/campaign/armies.ts` |
 | Construction, outposts, roads / production queues | `src/campaign/construction.ts`, `src/campaign/production.ts` |
 | Founding bases, supply convoys, relief landings | `src/campaign/expansion.ts`, `src/campaign/convoys.ts`, `src/campaign/relief.ts` |
 | Contacts → pending battles, outpost capture | `src/campaign/encounters.ts` |
+| Strategic intel: sightings, last known positions, base reports (fog of war in `queries.ts`) | `src/campaign/intel.ts` |
 | Diplomacy (standoff → hostile tension), random events, Earth shuttles | `src/campaign/diplomacy.ts`, `src/campaign/events.ts` |
 | Per-base economy (workforce, power, recipes, extraction, research, food, population) | `src/economy/economy.ts` |
 | Strategic AI (build plan, research, recruitment, raids, assaults, expansion, fog of war) | `src/ai/strategicAI.ts` |
@@ -88,8 +89,9 @@ Write long headless output to a file (`> out.txt`); piped `npx` output is buffer
 ## Debugging in the browser
 
 `window.__PX` exposes `app`, `state()`, `battle()`, `debugContact('field' | 'base_assault')` (spawns a
-hostile force next to your army/base and opens the contact dialog) and `debugFortify(types?)` (places
-finished buildings, e.g. `['research_lab']`, in the player's base). The e2e tests use these.
+hostile force next to your army/base and opens the contact dialog), `debugFortify(types?)` (places
+finished buildings, e.g. `['research_lab']`, in the player's base), `debugSighting()` (parks rival jeeps
+in view of your base and reports them) and `stepIntel()`. The e2e tests use these.
 
 ## Git and deployment
 

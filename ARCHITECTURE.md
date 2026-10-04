@@ -39,6 +39,8 @@ src/campaign/
   context.ts                SimContext {state, world, rng}, ids, log
   sim.ts                    stepCampaign / advanceCampaign (fixed step; stops when a battle is pending)
   armies.ts, construction.ts, production.ts, convoys.ts, diplomacy.ts, encounters.ts, events.ts, queries.ts, units.ts
+  expansion.ts, relief.ts   founding bases; relief landings for an expedition without bases
+  intel.ts                  per-faction sightings, last known positions and base reports (stepIntel; v9)
 src/economy/economy.ts      per-base economy step (workforce, power, recipes, extraction, units, food, population, upkeep)
 src/ai/strategicAI.ts       enemy expedition AI (economy, recruitment, military)
 src/battle/

@@ -654,6 +654,18 @@ body {
 .toast.fade {
   opacity: 0;
 }
+.toast.has-act {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-right: 6px;
+}
+.toast .act {
+  pointer-events: auto;
+  flex: none;
+  margin-left: auto;
+  min-height: var(--touch);
+}
 @keyframes toastIn {
   from {
     transform: translateX(-12px);

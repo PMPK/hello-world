@@ -55,6 +55,13 @@ export const MIGRATIONS: Record<number, Migration> = {
     for (const [id, c] of Object.entries(convoys)) out[id] = { ...c, toArmyId: c.toArmyId ?? null };
     return { ...s, convoys: out, version: 8 };
   },
+  // v9: strategic intelligence (sightings, last known positions, base reports)
+  8: (s) => {
+    const factions = (s.factions ?? {}) as Record<string, unknown>;
+    const intel: Record<string, unknown> = {};
+    for (const id of Object.keys(factions)) intel[id] = { armies: {}, bases: {} };
+    return { ...s, intel: s.intel ?? intel, version: 9 };
+  },
 };
 
 export function migrateState(raw: Record<string, unknown>): CampaignState {

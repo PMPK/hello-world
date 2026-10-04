@@ -1,7 +1,7 @@
 # CURRENT STATE
 
 *Last updated: post-MVP iteration 2 (research, garrisons, relief landings, convoys and supply runs, AI patrols,
-living bases, in-game help, ambient music). `main` carries everything; schema v8; 97 unit + 14 e2e tests green.*
+living bases, in-game help, ambient music, strategic intel). Schema v9; 103 unit + 16 e2e tests green.*
 
 ## What works
 
@@ -36,6 +36,10 @@ living bases, in-game help, ambient music). `main` carries everything; schema v8
   return; named commanders. **Supply trucks** keep task forces fuelled and armed in the field (pooled fuel
   range, extra rations, cargo shown in the army panel) and rearm nearby units in battle.
 - **Diplomacy**: standoff with rising tension → AI goes weapons-free at 100%; player attacks start hostilities.
+- **Intel**: contact reports when rival forces come into view (toast + log with *Show*, alert cue at war),
+  dashed **?** markers at the last known positions of forces that slipped out of view (bearing, strength,
+  age; cleared after 36 h or a close look), dated reports on rival bases (structures, defences, garrison,
+  population) that only refresh while in view, and a Contacts list in the overview.
 - **Transfers**: hand-sent convoys between your bases (base panel → Send convoy…): up to 120 units of
   stock plus 12 colonists, along roads or cross-country, interceptable; arrival reported in the log.
   **Supply runs** (army panel → Supply run…) carry fuel, ammunition and rations to a task force in the
@@ -90,13 +94,14 @@ living bases, in-game help, ambient music). `main` carries everything; schema v8
   manual (campaign + battle).
 - **Crash guard**: a single failing frame is skipped; 30 in a row stop the game with a "The simulation
   stopped" dialog (error text, Reload / Main menu) instead of a silent freeze. Saves are untouched.
-- **Tests**: 97 Vitest unit tests; Playwright smoke tests on phone-landscape touch and desktop mouse profiles
+- **Tests**: 103 Vitest unit tests; Playwright smoke tests on phone-landscape touch and desktop mouse profiles
   (full loop incl. unit card, save/continue, save-slot listing and import; fortified base assault;
   task force split/merge; founding a base and sending it a convoy; research lab project switching;
-  tap-to-garrison in a base battle; supply run to a task force; crash dialog after an injected fault).
-- **Save schema v8** (Building.repeat in v2, CampaignState.difficulty in v3, research shelf in v4, relief
-  landing state per faction in v5, convoy colonists in v6, AI patrol clock in v7, supply-run target in v8)
-  with migrations from v1.
+  tap-to-garrison in a base battle; supply run to a task force; intel alert → Show → last known
+  position marker → overview contact; crash dialog after an injected fault).
+- **Save schema v9** (Building.repeat in v2, CampaignState.difficulty in v3, research shelf in v4, relief
+  landing state per faction in v5, convoy colonists in v6, AI patrol clock in v7, supply-run target in v8,
+  per-faction intel in v9) with migrations from v1.
 - **Deployment**: GitHub Actions CI + Pages deploy workflow (gh-pages branch). A single-file build is also
   published as a claude.ai Artifact (https://claude.ai/artifact/7qGUMq5vWjnaNKRHEyempW).
 
@@ -143,11 +148,9 @@ is listed per day), `npm run sim:battle` (`ONLY=<label>` filters matrix lines), 
 
 ## Best next tasks
 
-1. **Intel**: alerts when enemy forces come into view (log + toast + jump-to), and an enemy-base report
-   (defences, garrison, structures) while it is in sight. Hooks: the enemy army panel ("Observed strength")
-   and enemy base panel ("Intelligence") in `src/ui/campaignHud.ts`; the HUD tick in
-   `src/app/campaignMode.ts` (`watchReliefLanding` shows the pattern); visibility via `isVisibleToFaction` in
-   `src/campaign/queries.ts`.
+1. **AI uses its intel**: the rival already keeps sightings and base reports (`state.intel[aiFaction]`) but its
+   decisions only look at what is in view now (`isVisibleToFaction` in `src/ai/strategicAI.ts`). Let raids,
+   defence recalls and offensives use last known positions and base reports.
 2. **Logistics depth**: escorts for convoys and supply runs; standing orders (repeat a convoy or supply run);
    AI escorts for its own convoys.
 3. **Battle**: infantry capturing enemy structures; infantry garrisoning bunkers (extra crew); garrisoned

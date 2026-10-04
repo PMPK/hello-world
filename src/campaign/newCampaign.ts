@@ -65,6 +65,7 @@ function blankState(seed: number, difficulty: Difficulty): CampaignState {
     characters: {},
     relations: [],
     ai: {},
+    intel: {},
     log: [],
     pendingBattle: null,
     nextEarthFlightAt: 84,
@@ -88,6 +89,7 @@ function addFaction(state: CampaignState, defId: string, isPlayer: boolean): Fac
     reliefLandings: 0,
   };
   state.factions[f.id] = f;
+  state.intel[f.id] = { armies: {}, bases: {} };
   return f;
 }
 

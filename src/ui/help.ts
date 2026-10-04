@@ -1,3 +1,4 @@
+import { PLAYER_VISION_RADIUS } from '../campaign/queries';
 import { btn, el } from './dom';
 import { openModal } from './screens';
 
@@ -22,6 +23,7 @@ function campaignTips(touch: boolean): string[] {
       : 'Drag or WASD to pan, wheel to zoom, right-drag or Q/E to rotate. Space pauses, 1 / 2 / 4 set the speed.',
     `${tap} a task force, then ${touch ? 'tap' : 'right-click'} the ground to move it or an enemy to attack. Forces need rations, fuel and ammunition — trucks carry more, bases refill them.`,
     'Follow the DIRECTIVE line at the top-left: it walks you through the economy, the military, research, fortifications and expansion.',
+    `Rival forces that come into view are reported — ${tap.toLowerCase()} Show to jump to them. When one slips out of view, a dashed ? marker keeps its last known position; rival bases only reveal their defences and garrison while one of your forces is within ${PLAYER_VISION_RADIUS} km (the overview lists every contact).`,
     'The rival will not shoot first while the standoff lasts — but tension rises. Fortify before it reaches 100%.',
   ];
 }

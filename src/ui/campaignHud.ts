@@ -8,8 +8,9 @@ import { ARMY_MAX_UNITS, armyBaseSpeed, armyMen, armySupplies, fuelRange, maxRat
 import { canBuildOutpost, canBuildType, OUTPOST_RANGE } from '../campaign/construction';
 import { canFoundFrom, FOUND_COLONISTS, FOUND_COST, MAX_FOUND_RANGE, MIN_BASE_SPACING } from '../campaign/expansion';
 import { affordability, designsFor, MAX_QUEUE } from '../campaign/production';
-import { basesOf, isOutpost, relationOf } from '../campaign/queries';
-import type { Army, Base, Building, BuildingStatus, CampaignState, LogEntry, PendingBattle, UnitInstance } from '../campaign/types';
+import { basesOf, isOutpost, isVisibleToFaction, PLAYER_VISION_RADIUS, relationOf } from '../campaign/queries';
+import { agoText, CLOSE_LOOK, compassPoint, defencesText, observeBase, placeName, plural, SIGHTING_TTL, structureCount, tallyCount, tallyText } from '../campaign/intel';
+import type { Army, ArmySighting, Base, BaseReport, Building, BuildingStatus, CampaignState, LogEntry, PendingBattle, UnitInstance } from '../campaign/types';
 import { FOOD_PER_PERSON_HOUR } from '../economy/economy';
 import { statsOf } from '../units/stats';
 import { defenseStatsOf } from '../units/defense';
@@ -24,6 +25,8 @@ export type Selection =
   | { kind: 'base'; id: string }
   | { kind: 'building'; id: string }
   | { kind: 'site'; id: string }
+  /** A rival force's last known position (id = the army id in the player's intel). */
+  | { kind: 'contact'; id: string }
   | null;
 
 /** What the HUD needs from the campaign mode. */
@@ -36,6 +39,8 @@ export interface CampaignController {
   readonly placing: { kind: 'building' | 'base'; typeId: BuildingTypeId; valid: boolean; reason: string } | null;
   setSpeed(s: SpeedSetting): void;
   select(sel: Selection, focus?: boolean): void;
+  /** Jump to what a log entry is about (a sighted force, a reported base, or just its position). */
+  showLogEntry(e: LogEntry): void;
   openMenu(): void;
   armyStop(id: string): void;
   armyReturn(id: string): void;
@@ -362,10 +367,35 @@ export class CampaignHud {
       row.addEventListener('click', () => go({ kind: 'army', id: a.id }));
       armies.append(row);
     }
+    const contacts = el('div', 'list');
+    const seen = Object.values(s.intel[pf]?.armies ?? {}).sort((a, b) => Number(b.inSight) - Number(a.inSight) || b.t - a.t);
+    if (!seen.length) contacts.append(el('div', { class: 'muted', text: 'No rival forces in view or recently seen.' }));
+    for (const c of seen) {
+      const row = el(
+        'div',
+        'item tap',
+        el('span', { class: 'badge foe', text: `${tallyCount(c.units)}` }),
+        el('span', { class: 'name', text: c.name }),
+        el('span', {
+          class: `meta ${c.inSight ? 'warn' : 'muted'}`,
+          text: `${c.inSight ? 'in view' : `last seen ${agoText(s.time - c.t)}`} · ${placeName(s, c.x, c.z)} · ${tallyText(c.units)}`,
+        }),
+      );
+      row.dataset.testid = 'overview-contact';
+      row.addEventListener('click', () => go(c.inSight && s.armies[c.armyId] ? { kind: 'army', id: c.armyId } : { kind: 'contact', id: c.armyId }));
+      contacts.append(row);
+    }
     close = openModal(this.host, {
       kicker: 'Expedition overview',
       title: s.factions[pf]?.name ?? 'Expedition',
-      body: [el('div', { class: 'label', text: 'Bases' }), bases, el('div', { class: 'label', text: 'Task forces' }), armies],
+      body: [
+        el('div', { class: 'label', text: 'Bases' }),
+        bases,
+        el('div', { class: 'label', text: 'Task forces' }),
+        armies,
+        el('div', { class: 'label', text: 'Contacts' }),
+        contacts,
+      ],
       actions: [{ label: 'Close', onClick: () => undefined }],
       dismissable: true,
     });
@@ -438,13 +468,16 @@ export class CampaignHud {
     const log = this.c.state.log;
     if (this.seenLog > log.length) this.seenLog = 0;
     let fresh = false;
+    let alarm = false;
     for (let i = this.seenLog; i < log.length; i++) {
       const e = log[i];
       if (e.factionId && e.factionId !== this.c.state.playerFactionId) continue;
-      this.toasts.push(e.text, e.kind);
+      if (e.at || e.ref) this.toasts.push(e.text, e.kind, 9000, { label: 'Show', onClick: () => this.c.showLogEntry(e) });
+      else this.toasts.push(e.text, e.kind);
       fresh = true;
+      if (e.ref?.kind === 'army' && e.kind === 'warn') alarm = true;
     }
-    if (fresh && this.seenLog > 0) this.c.sound('radio');
+    if (fresh && this.seenLog > 0) this.c.sound(alarm ? 'alert' : 'radio');
     this.seenLog = log.length;
   }
 
@@ -589,18 +622,27 @@ export class CampaignHud {
   openLog(): void {
     const s = this.c.state;
     const list = el('div', 'list');
+    let close: () => void = () => undefined;
     const entries = s.log.filter((e: LogEntry) => !e.factionId || e.factionId === s.playerFactionId).slice(-40).reverse();
     for (const e of entries) {
-      list.append(
-        el(
-          'div',
-          'item',
-          el('span', { class: 'meta', text: formatCampaignTime(e.t).split(' · ')[1] ?? '' }),
-          el('span', { class: `name ${e.kind === 'battle' ? 'bad' : e.kind === 'warn' ? 'warn' : e.kind === 'lore' ? 'accent' : ''}`, style: { whiteSpace: 'normal' }, text: e.text }),
-        ),
+      const where = !!(e.at || e.ref);
+      const row = el(
+        'div',
+        where ? 'item tap' : 'item',
+        el('span', { class: 'meta', text: formatCampaignTime(e.t).split(' · ')[1] ?? '' }),
+        el('span', { class: `name ${e.kind === 'battle' ? 'bad' : e.kind === 'warn' ? 'warn' : e.kind === 'lore' ? 'accent' : ''}`, style: { whiteSpace: 'normal' }, text: e.text }),
+        where ? el('span', { class: 'meta accent', text: 'SHOW' }) : null,
       );
+      if (where) {
+        row.dataset.testid = 'log-show';
+        row.addEventListener('click', () => {
+          close();
+          this.c.showLogEntry(e);
+        });
+      }
+      list.append(row);
     }
-    openModal(this.host, { kicker: 'Communications', title: 'Event log', body: [list], actions: [{ label: 'Close', onClick: () => undefined }], dismissable: true });
+    close = openModal(this.host, { kicker: 'Communications', title: 'Event log', body: [list], actions: [{ label: 'Close', onClick: () => undefined }], dismissable: true });
   }
 
   // ---------------------------------------------------------------------------
@@ -615,6 +657,10 @@ export class CampaignHud {
     else if (sel?.kind === 'base' && s.bases[sel.id]) panel = this.basePanel(s.bases[sel.id]);
     else if (sel?.kind === 'building' && s.buildings[sel.id]) panel = this.buildingPanel(s.buildings[sel.id]);
     else if (sel?.kind === 'site' && s.sites[sel.id]) panel = this.sitePanel(sel.id);
+    else if (sel?.kind === 'contact') {
+      const seen = s.intel[s.playerFactionId]?.armies[sel.id];
+      if (seen) panel = this.contactPanel(seen);
+    }
     if (!panel) {
       if (this.sidePanel) {
         this.sidePanel.remove();
@@ -679,10 +725,13 @@ export class CampaignHud {
     const cmd = a.commanderId ? s.characters[a.commanderId] : undefined;
     const { panel, body } = this.panelShell(`army:${a.id}`, a.name, `${mine ? 'Task force' : fac?.name ?? 'Unknown'}${cmd ? ` · ${cmd.name}` : ''}`, fac?.color);
     if (!mine) {
-      const sec = this.section(body, 'Observed strength');
+      const sec = this.section(body, 'Observed strength', 'IN VIEW');
+      const seen = s.intel[s.playerFactionId]?.armies[a.id];
       this.kv(sec, [
         ['Units', `${a.units.length}`],
         ['Personnel', `~${Math.round(armyMen(a) / 5) * 5}`],
+        ['Heading', seen && (seen.hx || seen.hz) ? compassPoint(seen.hx, seen.hz) : 'stationary'],
+        ['Position', placeName(s, a.x, a.z)],
       ]);
       sec.append(el('div', { class: 'hint', text: composition(a.units) }));
       const list = el('div', 'list');
@@ -884,6 +933,57 @@ export class CampaignHud {
     list.after(el('div', 'actions', confirm));
   }
 
+  /** What the player knows about a rival base: live while in view, otherwise the last dated report. */
+  private baseIntel(body: HTMLElement, b: Base): void {
+    const s = this.c.state;
+    const live = isVisibleToFaction(s, s.playerFactionId, b.x, b.z);
+    const r: BaseReport | undefined = live ? observeBase(s, b) : s.intel[s.playerFactionId]?.bases[b.id];
+    const sec = this.section(body, 'Intelligence', live ? 'IN VIEW' : r ? `REPORT ${agoText(s.time - r.t)}`.toUpperCase() : 'NO REPORT');
+    sec.dataset.testid = 'base-intel';
+    if (!r) {
+      sec.append(
+        el('div', {
+          class: 'hint',
+          text: `No report yet. Bring a task force within ${PLAYER_VISION_RADIUS} km of the base to observe its defences and garrison.`,
+        }),
+      );
+      return;
+    }
+    const garrison = tallyCount(r.garrison);
+    const def = defencesText(r);
+    this.kv(sec, [
+      ['Structures', `${structureCount(r)}${r.underConstruction ? ` + ${r.underConstruction} building` : ''}`],
+      ['Defences', def || 'none seen', def ? 'warn' : ''],
+      ['Garrison', garrison ? `${plural(garrison, 'unit')} · ~${Math.round(r.garrisonMen / 5) * 5} soldiers` : 'none seen', garrison ? 'warn' : ''],
+      ['Population', `~${r.population}`],
+    ]);
+    if (garrison) sec.append(el('div', { class: 'hint', text: tallyText(r.garrison) }));
+    if (!live) sec.append(el('div', { class: 'hint', text: `Report from ${formatCampaignTime(r.t)}. Send a task force within ${PLAYER_VISION_RADIUS} km for a fresh look.` }));
+  }
+
+  /** A rival force that slipped out of view: where and when it was last seen. */
+  private contactPanel(c: ArmySighting): HTMLElement {
+    const s = this.c.state;
+    const fac = s.factions[c.factionId];
+    const { panel, body } = this.panelShell(`contact:${c.armyId}`, c.name, `${fac?.name ?? 'Unknown'} · last known position`, fac?.color);
+    const sec = this.section(body, 'Last contact', agoText(s.time - c.t).toUpperCase());
+    this.kv(sec, [
+      ['Seen', formatCampaignTime(c.t)],
+      ['Position', placeName(s, c.x, c.z)],
+      ['Heading', c.hx || c.hz ? compassPoint(c.hx, c.hz) : 'stationary'],
+      ['Units', `${tallyCount(c.units)}`],
+      ['Personnel', `~${Math.round(c.men / 5) * 5}`],
+    ]);
+    sec.append(el('div', { class: 'hint', text: tallyText(c.units) }));
+    body.append(
+      el('div', {
+        class: 'hint',
+        text: `Out of view — it may have moved on. The marker fades after ${SIGHTING_TTL} h, or once one of your forces gets within ${Math.round(PLAYER_VISION_RADIUS * CLOSE_LOOK)} km of the spot. Select a task force and tap the marker to send it there.`,
+      }),
+    );
+    return panel;
+  }
+
   private basePanel(b: Base): HTMLElement {
     const s = this.c.state;
     const mine = b.factionId === s.playerFactionId;
@@ -891,11 +991,7 @@ export class CampaignHud {
     const { panel, body } = this.panelShell(`base:${b.id}`, b.name, mine ? 'Expedition base' : fac?.name ?? 'Unknown', fac?.color);
     const buildings = Object.values(s.buildings).filter((x) => x.baseId === b.id);
     if (!mine) {
-      const sec = this.section(body, 'Intelligence');
-      this.kv(sec, [
-        ['Structures', `${buildings.filter((x) => x.state !== 'destroyed').length}`],
-        ['Garrison', b.garrison.length ? `~${b.garrison.length} units` : 'none observed'],
-      ]);
+      this.baseIntel(body, b);
       body.append(el('div', { class: 'hint', text: 'Select one of your task forces, then tap this base to assault it. Captured bases keep their surviving structures and personnel.' }));
       return panel;
     }

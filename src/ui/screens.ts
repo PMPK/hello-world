@@ -236,8 +236,17 @@ export class Toasts {
     this.el = el('div', 'toasts');
     root.append(this.el);
   }
-  push(text: string, kind = 'info', ms = 6500): void {
+  /** `action` adds a button to the toast (the only part of the toast that takes taps). */
+  push(text: string, kind = 'info', ms = 6500, action?: { label: string; onClick: () => void }): void {
     const t = el('div', { class: `toast ${kind}`, text });
+    if (action) {
+      const b = btn(action.label, () => {
+        action.onClick();
+        t.remove();
+      }, 'small act');
+      t.classList.add('has-act');
+      t.append(b);
+    }
     this.el.prepend(t);
     while (this.el.children.length > 4) this.el.lastElementChild?.remove();
     setTimeout(() => t.classList.add('fade'), ms);

@@ -5,7 +5,8 @@ import { createCampaign, worldForState } from '../campaign/newCampaign';
 import { createUnit } from '../campaign/units';
 import { makeBuilding, suggestPlacement } from '../campaign/construction';
 import { BUILDINGS, type BuildingTypeId } from '../data/buildings';
-import type { CampaignState } from '../campaign/types';
+import type { Army, CampaignState } from '../campaign/types';
+import { stepIntel } from '../campaign/intel';
 import type { World } from '../world/world';
 import type { BattleResult, BattleSetup } from '../battle/types';
 import { openStore } from '../persistence/kvstore';
@@ -524,6 +525,43 @@ function debugFortify(app: App, types: BuildingTypeId[] = ['bunker', 'at_emplace
   return n;
 }
 
+/**
+ * Park a pair of rival jeeps 26 km from the player's base, towards the rival,
+ * and run the intel step so the sighting is reported at once (debug/testing
+ * aid). Returns the new force's id.
+ */
+function debugSighting(app: App): string | null {
+  const c = app.campaign;
+  if (!c) return null;
+  const s = c.state;
+  const pf = s.playerFactionId;
+  const ef = Object.keys(s.factions).find((f) => f !== pf);
+  const home = Object.values(s.bases).find((b) => b.factionId === pf);
+  if (!ef || !home) return null;
+  const rival = Object.values(s.bases).find((b) => b.factionId === ef);
+  const ang = rival ? Math.atan2(rival.z - home.z, rival.x - home.x) : 0;
+  const army: Army = {
+    id: `dbg${s.nextId++}`,
+    name: 'Recon Debug',
+    factionId: ef,
+    commanderId: null,
+    units: ['recon_jeep', 'recon_jeep'].map((d) => createUnit(s, d)),
+    x: home.x + Math.cos(ang) * 26,
+    z: home.z + Math.sin(ang) * 26,
+    path: [],
+    order: { type: 'idle' },
+    food: 20,
+    homeBaseId: rival?.id ?? null,
+    lastBattleTime: -999,
+    repathAt: 0,
+    aiRole: 'patrol',
+  };
+  s.armies[army.id] = army;
+  if (s.ai[ef]) s.ai[ef].nextThinkAt = s.time + 48;
+  stepIntel(c.ctx);
+  return army.id;
+}
+
 /** Expose a small debug/test API on window (used by the Playwright smoke test). */
 export function exposeDebug(app: App): void {
   (window as unknown as { __PX: unknown }).__PX = {
@@ -533,5 +571,8 @@ export function exposeDebug(app: App): void {
     battle: () => app.battle?.sim ?? null,
     debugContact: (kind: 'field' | 'base_assault' = 'field') => debugContact(app, kind),
     debugFortify: (types?: BuildingTypeId[]) => debugFortify(app, types),
+    debugSighting: () => debugSighting(app),
+    /** Run the intel step now (e.g. after moving forces by hand while paused). */
+    stepIntel: () => (app.campaign ? stepIntel(app.campaign.ctx) : undefined),
   };
 }

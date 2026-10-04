@@ -126,28 +126,40 @@ export function countBuildings(state: CampaignState, baseId: string, typeId: Bui
   return n;
 }
 
-/** Strategic fog of war: positions the player currently has eyes on. */
+/** Strategic fog of war: how far a task force sees (km). Bases see a little further, outposts less. */
 export const PLAYER_VISION_RADIUS = 34;
 
-export function isVisibleToFaction(state: CampaignState, factionId: string, x: number, z: number): boolean {
+/** A point a faction observes from, with its squared sight radius. */
+export interface Eye {
+  x: number;
+  z: number;
+  r2: number;
+}
+
+/** Everything a faction has eyes on the map with: task forces, bases and extractor outposts. */
+export function eyesOf(state: CampaignState, factionId: string): Eye[] {
   const r2 = PLAYER_VISION_RADIUS * PLAYER_VISION_RADIUS;
-  for (const a of Object.values(state.armies)) {
-    if (a.factionId !== factionId) continue;
-    const dx = a.x - x;
-    const dz = a.z - z;
-    if (dx * dx + dz * dz <= r2) return true;
-  }
-  for (const b of Object.values(state.bases)) {
-    if (b.factionId !== factionId) continue;
-    const dx = b.x - x;
-    const dz = b.z - z;
-    if (dx * dx + dz * dz <= r2 * 1.2) return true;
-  }
+  const eyes: Eye[] = [];
+  for (const a of Object.values(state.armies)) if (a.factionId === factionId) eyes.push({ x: a.x, z: a.z, r2 });
+  for (const b of Object.values(state.bases)) if (b.factionId === factionId) eyes.push({ x: b.x, z: b.z, r2: r2 * 1.2 });
   for (const b of Object.values(state.buildings)) {
     if (b.factionId !== factionId || b.typeId !== 'extractor' || b.state === 'destroyed') continue;
-    const dx = b.x - x;
-    const dz = b.z - z;
-    if (dx * dx + dz * dz <= r2 * 0.5) return true;
+    eyes.push({ x: b.x, z: b.z, r2: r2 * 0.5 });
+  }
+  return eyes;
+}
+
+/** Whether any of `eyes` sees (x, z); `reach` scales the sight radius (0.5 = a close look). */
+export function seenBy(eyes: Eye[], x: number, z: number, reach = 1): boolean {
+  const k = reach * reach;
+  for (const e of eyes) {
+    const dx = e.x - x;
+    const dz = e.z - z;
+    if (dx * dx + dz * dz <= e.r2 * k) return true;
   }
   return false;
+}
+
+export function isVisibleToFaction(state: CampaignState, factionId: string, x: number, z: number): boolean {
+  return seenBy(eyesOf(state, factionId), x, z);
 }

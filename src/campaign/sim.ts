@@ -6,6 +6,7 @@ import { stepConvoys } from './convoys';
 import { stepDiplomacy } from './diplomacy';
 import { detectEncounters } from './encounters';
 import { stepEvents } from './events';
+import { stepIntel } from './intel';
 import { armiesOf, basesOf } from './queries';
 import { stepRelief } from './relief';
 
@@ -22,6 +23,7 @@ export function stepCampaign(ctx: SimContext, dt: number): void {
   stepStrategicAI(ctx, dt);
   stepDiplomacy(ctx, dt);
   stepEvents(ctx, dt);
+  stepIntel(ctx);
   detectEncounters(ctx);
   updateDefeat(ctx);
   stepRelief(ctx);
