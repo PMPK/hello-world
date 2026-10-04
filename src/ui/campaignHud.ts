@@ -16,6 +16,7 @@ import { statsOf } from '../units/stats';
 import { defenseStatsOf } from '../units/defense';
 import { availableTechs, TECHS } from '../research/research';
 import { reliefEta } from '../campaign/relief';
+import { entriesSince } from '../campaign/context';
 import { CONVOY_SPEED, KEEP_AT_HOME, MANUAL_CONVOY_CAPACITY, MANUAL_CONVOY_SEATS, supplyRunProblem, transferProblem } from '../campaign/convoys';
 import { bar, btn, clear, el, fmt, ICONS, iconBtn, signed } from './dom';
 import { openModal, Toasts } from './screens';
@@ -140,7 +141,8 @@ export class CampaignHud {
   private holding = false;
   private lastScroll = 0;
   private lastHtml = '';
-  private seenLog = 0;
+  /** Newest log entry already toasted. */
+  private seenLog: LogEntry | null = null;
   private contactClose: (() => void) | null = null;
   private contactFor: string | null = null;
   focusBaseId: string | null = null;
@@ -169,7 +171,7 @@ export class CampaignHud {
     this.root.append(this.top, fab, this.side, this.placementBar, this.directive);
     host.append(this.root);
     this.toasts = new Toasts(this.root);
-    this.seenLog = this.c.state.log.length;
+    this.seenLog = this.c.state.log[this.c.state.log.length - 1] ?? null;
     window.addEventListener('pointerup', this.release);
     window.addEventListener('pointercancel', this.release);
     this.update(true);
@@ -466,19 +468,18 @@ export class CampaignHud {
 
   private updateToasts(): void {
     const log = this.c.state.log;
-    if (this.seenLog > log.length) this.seenLog = 0;
-    let fresh = false;
+    const fresh = entriesSince(log, this.seenLog);
+    this.seenLog = log[log.length - 1] ?? this.seenLog;
+    let shown = false;
     let alarm = false;
-    for (let i = this.seenLog; i < log.length; i++) {
-      const e = log[i];
+    for (const e of fresh) {
       if (e.factionId && e.factionId !== this.c.state.playerFactionId) continue;
       if (e.at || e.ref) this.toasts.push(e.text, e.kind, 9000, { label: 'Show', onClick: () => this.c.showLogEntry(e) });
       else this.toasts.push(e.text, e.kind);
-      fresh = true;
+      shown = true;
       if (e.ref?.kind === 'army' && e.kind === 'warn') alarm = true;
     }
-    if (fresh && this.seenLog > 0) this.c.sound(alarm ? 'alert' : 'radio');
-    this.seenLog = log.length;
+    if (shown) this.c.sound(alarm ? 'alert' : 'radio');
   }
 
   toast(text: string, kind = 'info'): void {

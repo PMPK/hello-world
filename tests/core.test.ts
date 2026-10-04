@@ -4,6 +4,8 @@ import { campaignDay, formatCampaignTime, formatDuration } from '../src/core/tim
 import { generateTerrain, heightAt, BIOME, MAP_GRID } from '../src/world/terrain';
 import { generateLayout, BASE_RADIUS } from '../src/world/mapgen';
 import { dist } from '../src/core/math';
+import { entriesSince, log, LOG_LIMIT } from '../src/campaign/context';
+import type { CampaignState, LogEntry } from '../src/campaign/types';
 
 describe('rng', () => {
   it('is deterministic for a seed and restorable from state', () => {
@@ -79,5 +81,26 @@ describe('terrain & layout', () => {
         for (const b of layout.bases) expect(dist(s.x, s.z, b.x, b.z)).toBeGreaterThan(BASE_RADIUS);
       }
     }
+  });
+});
+
+describe('event log readers', () => {
+  it('see new entries even after the log is trimmed to its cap', () => {
+    const state = { time: 0, log: [] as LogEntry[] } as unknown as CampaignState;
+    for (let i = 0; i < LOG_LIMIT; i++) log(state, `old ${i}`);
+    let seen: LogEntry | null = state.log[state.log.length - 1];
+    state.time = 1;
+    log(state, 'new A');
+    log(state, 'new B');
+    expect(state.log.length).toBe(LOG_LIMIT);
+    expect(entriesSince(state.log, seen).map((e) => e.text)).toEqual(['new A', 'new B']);
+    seen = state.log[state.log.length - 1];
+    expect(entriesSince(state.log, seen)).toEqual([]);
+    // the reader fell far behind: everything newer than what it saw
+    const stale: LogEntry = { t: 0.5, text: 'gone', kind: 'info' };
+    state.time = 2;
+    log(state, 'new C');
+    expect(entriesSince(state.log, stale).map((e) => e.text)).toEqual(['new A', 'new B', 'new C']);
+    expect(entriesSince(state.log, null).length).toBe(LOG_LIMIT);
   });
 });

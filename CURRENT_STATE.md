@@ -1,7 +1,7 @@
 # CURRENT STATE
 
 *Last updated: post-MVP iteration 2 (research, garrisons, relief landings, convoys and supply runs, AI patrols,
-living bases, in-game help, ambient music, strategic intel). Schema v9; 103 unit + 16 e2e tests green.*
+living bases, in-game help, ambient music, strategic intel). Schema v9; 104 unit + 16 e2e tests green.*
 
 ## What works
 
@@ -94,7 +94,7 @@ living bases, in-game help, ambient music, strategic intel). Schema v9; 103 unit
   manual (campaign + battle).
 - **Crash guard**: a single failing frame is skipped; 30 in a row stop the game with a "The simulation
   stopped" dialog (error text, Reload / Main menu) instead of a silent freeze. Saves are untouched.
-- **Tests**: 103 Vitest unit tests; Playwright smoke tests on phone-landscape touch and desktop mouse profiles
+- **Tests**: 104 Vitest unit tests; Playwright smoke tests on phone-landscape touch and desktop mouse profiles
   (full loop incl. unit card, save/continue, save-slot listing and import; fortified base assault;
   task force split/merge; founding a base and sending it a convoy; research lab project switching;
   tap-to-garrison in a base battle; supply run to a task force; intel alert → Show → last known
