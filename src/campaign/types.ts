@@ -11,7 +11,7 @@ import type { ResearchState } from '../research/research';
  */
 
 /** Bump when the shape of CampaignState changes; add a migration in persistence/migrations.ts. */
-export const STATE_VERSION = 6;
+export const STATE_VERSION = 7;
 
 export interface UnitInstance {
   id: string;
@@ -52,7 +52,7 @@ export interface Army {
   /** Re-path timer for pursuit orders. */
   repathAt: number;
   /** Strategic AI role tag (null for player armies). */
-  aiRole: 'attack' | 'defend' | 'raid' | null;
+  aiRole: 'attack' | 'defend' | 'raid' | 'patrol' | null;
 }
 
 export type BuildingState = 'construction' | 'active' | 'destroyed';
@@ -210,6 +210,8 @@ export interface AIState {
   targetKind: 'base' | 'building' | 'army' | null;
   targetId: string | null;
   lastBuildCheck: number;
+  /** Campaign time the last recon patrol set out. */
+  lastPatrolAt: number;
 }
 
 export type BattleKind = 'field' | 'base_assault' | 'outpost';

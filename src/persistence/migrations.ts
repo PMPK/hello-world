@@ -41,6 +41,13 @@ export const MIGRATIONS: Record<number, Migration> = {
     for (const [id, c] of Object.entries(convoys)) out[id] = { ...c, people: c.people ?? 0 };
     return { ...s, convoys: out, version: 6 };
   },
+  // v7: the strategic AI sends recon patrols
+  6: (s) => {
+    const ai = (s.ai ?? {}) as Record<string, Record<string, unknown>>;
+    const out: Record<string, Record<string, unknown>> = {};
+    for (const [id, a] of Object.entries(ai)) out[id] = { ...a, lastPatrolAt: a.lastPatrolAt ?? -999 };
+    return { ...s, ai: out, version: 7 };
+  },
 };
 
 export function migrateState(raw: Record<string, unknown>): CampaignState {

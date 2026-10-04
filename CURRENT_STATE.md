@@ -49,11 +49,12 @@
   the buildings facing the attack and tanks shell spotted garrisons; missile teams stand off
   against armour; when contact is lost it probes last-known positions and sweeps the enemy's rear, and a
   beaten remnant withdraws even out of sight (no more stalled draws against a hidden, crippled tank).
-- **Strategic AI**: needs-based build order, staffing/manpower-aware recruitment, raids on outposts,
+- **Strategic AI**: recon patrols (jeep pairs that watch the map, hunt convoys and weak forces at war),
+  needs-based build order, staffing/manpower-aware recruitment, raids on outposts,
   base assaults, defence recalls, fuel/readiness checks, refits after defeats; **strategic fog of war**
   (it only targets and reacts to player forces it can see).
-- **Difficulty** (main menu, per campaign): Easy / Normal / Hard tune the rival's economy speed,
-  caution, offensive tempo, tension drift and battlefield reaction time/flanking.
+- **Difficulty** (main menu, per campaign): Easy / Normal / Hard tune the rival's starting force,
+  economy speed, caution, offensive tempo, tension drift and battlefield reaction time/flanking.
 - **Results**: casualties, rescued crews returning to population, damage/ammo/fuel persisted, buildings
   destroyed/damaged, base and outpost capture, loser retreats, stats and log.
 - **Saves**: IndexedDB (fallbacks), versioned envelope + migrations, autosave (timer, app hidden, battles),
@@ -68,12 +69,12 @@
   acknowledgements, radio chirps for reports, contact alarm, wind ambience; Sound Off/Low/Medium/High in
   settings, M to mute.
 - **Auto-resolve** runs in time slices with a progress dialog (no main-thread freeze on phones).
-- **Tests**: 85 Vitest unit tests; Playwright smoke tests on phone-landscape touch and desktop mouse profiles
+- **Tests**: 89 Vitest unit tests; Playwright smoke tests on phone-landscape touch and desktop mouse profiles
   (full loop incl. unit card, save/continue, save-slot listing and import; fortified base assault;
   task force split/merge; founding a base and sending it a convoy; research lab project switching;
   tap-to-garrison in a base battle).
-- **Save schema v6** (Building.repeat in v2, CampaignState.difficulty in v3, research shelf in v4, relief
-  landing state per faction in v5, convoy colonists in v6) with migrations from v1.
+- **Save schema v7** (Building.repeat in v2, CampaignState.difficulty in v3, research shelf in v4, relief
+  landing state per faction in v5, convoy colonists in v6, AI patrol clock in v7) with migrations from v1.
 - **Deployment**: GitHub Actions CI + Pages deploy workflow (gh-pages branch). A single-file build is also
   published as a claude.ai Artifact (https://claude.ai/artifact/7qGUMq5vWjnaNKRHEyempW).
 
@@ -129,7 +130,7 @@ is listed per day), `npm run sim:battle` (`ONLY=<label>` filters matrix lines), 
 2. Defences: let the player see/attack enemy positions from the campaign map (intel), and garrison
    infantry inside bunkers.
 3. Infantry capturing enemy structures in battle; garrisoning bunkers (extra crew).
-4. AI scouting behaviour (recon patrols) to make use of its fog of war; per-difficulty starting bonuses.
+4. AI escorts for its own convoys; player-visible intel reports from patrol contacts.
 5. Base specialisation; standing transfer orders (repeat a convoy) and convoy escorts.
 6. Battle simulation in a Web Worker; spatial hash for targeting.
 7. Audio polish: music stems, distant battle rumble on the campaign map, per-faction radio voices.

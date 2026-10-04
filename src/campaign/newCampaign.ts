@@ -5,7 +5,7 @@ import { ENEMY_FACTION_DEF, FACTION_DEFS, PLAYER_FACTION_DEF } from '../data/fac
 import { INTRO_SIGNOFF } from '../data/lore';
 import { emptyStock, stockFrom } from '../data/resources';
 import { emptyResearch } from '../research/research';
-import type { Difficulty } from '../data/difficulty';
+import { difficultyOf, type Difficulty } from '../data/difficulty';
 import { BASE_RADIUS, generateLayout } from '../world/mapgen';
 import { generateTerrain } from '../world/terrain';
 import { World } from '../world/world';
@@ -103,7 +103,7 @@ export function placeStartBuilding(ctx: SimContext, base: Base, typeId: Building
   state.buildings[b.id] = b;
 }
 
-function setupExpedition(ctx: SimContext, factionId: string, x: number, z: number): Base {
+function setupExpedition(ctx: SimContext, factionId: string, x: number, z: number, force: { add: string[]; remove: string[] } = { add: [], remove: [] }): Base {
   const { state, rng } = ctx;
   const def = FACTION_DEFS[state.factions[factionId].defId];
   const base: Base = {
@@ -143,15 +143,13 @@ function setupExpedition(ctx: SimContext, factionId: string, x: number, z: numbe
   }
 
   // Starting forces: a small field task force with its supply truck and a squad on guard duty.
-  const units = [
-    createUnit(state, 'rifle_squad'),
-    createUnit(state, 'rifle_squad'),
-    createUnit(state, 'rifle_squad'),
-    createUnit(state, 'recon_jeep'),
-    createUnit(state, 'recon_jeep'),
-    createUnit(state, 'mbt'),
-    createUnit(state, 'supply_truck'),
-  ];
+  const designs = ['rifle_squad', 'rifle_squad', 'rifle_squad', 'recon_jeep', 'recon_jeep', 'mbt', 'supply_truck'];
+  for (const d of force.remove) {
+    const k = designs.indexOf(d);
+    if (k >= 0) designs.splice(k, 1);
+  }
+  designs.push(...force.add);
+  const units = designs.map((d) => createUnit(state, d));
   const ang = rng.range(0, Math.PI * 2);
   let ax = x + Math.cos(ang) * (BASE_RADIUS + 3);
   let az = z + Math.sin(ang) * (BASE_RADIUS + 3);
@@ -177,7 +175,7 @@ export function createCampaign(seed: number, difficulty: Difficulty = 'normal'):
   const enemy = addFaction(state, ENEMY_FACTION_DEF, false);
   state.playerFactionId = player.id;
   state.relations.push({ a: player.id, b: enemy.id, status: 'standoff', tension: 8, warningIssued: false });
-  state.ai[enemy.id] = { factionId: enemy.id, nextThinkAt: 1, lastAttackLaunch: -999, targetKind: null, targetId: null, lastBuildCheck: 0 };
+  state.ai[enemy.id] = { factionId: enemy.id, nextThinkAt: 1, lastAttackLaunch: -999, targetKind: null, targetId: null, lastBuildCheck: 0, lastPatrolAt: -999 };
 
   for (const s of layout.sites) {
     const id = newId(state, 's');
@@ -185,7 +183,7 @@ export function createCampaign(seed: number, difficulty: Difficulty = 'normal'):
   }
 
   const pBase = setupExpedition(ctx, player.id, layout.bases[0].x, layout.bases[0].z);
-  const eBase = setupExpedition(ctx, enemy.id, layout.bases[1].x, layout.bases[1].z);
+  const eBase = setupExpedition(ctx, enemy.id, layout.bases[1].x, layout.bases[1].z, difficultyOf(difficulty).aiStartForce);
 
   const director: Character = {
     id: newId(state, 'ch'),

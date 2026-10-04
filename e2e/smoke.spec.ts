@@ -212,10 +212,11 @@ test('base assault battle contains the base buildings', async ({ page }, info) =
     const b = mine.sort((a: any, c: any) => clear(c) - clear(a))[0];
     p.app.battle.speed = 0;
     p.app.battle.selectOnly(squad.id);
-    p.app.battle.view.rig.focus(b.x, b.z, 140);
+    p.app.battle.view.rig.jumpTo(b.x, b.z, 140);
     return { squad: squad.id, building: b.id };
   });
-  await page.waitForTimeout(1500);
+  // the camera jumped onto the building (no easing), so its screen position is final
+  await page.waitForTimeout(400);
   const at = await page.evaluate((id) => {
     const p = (window as any).__PX;
     const b = p.battle().buildings.find((x: any) => x.id === id);

@@ -17,19 +17,22 @@ export interface DifficultyDef {
   tacticalThink: number;
   /** Whether the tactical AI sends flanking groups. */
   flanking: boolean;
+  /** Changes to the rival's starting task force (unit design ids). */
+  aiStartForce: { add: string[]; remove: string[] };
 }
 
 export const DIFFICULTIES: Record<Difficulty, DifficultyDef> = {
   easy: {
     id: 'easy',
     name: 'Easy',
-    description: 'A cautious rival with a slower economy. Hostilities take longer to break out; its battlefield commanders react slowly and never flank.',
+    description: 'A cautious rival with a slower economy and no tank at the start. Hostilities take longer to break out; its battlefield commanders react slowly and never flank.',
     aiIncome: 0.8,
     aiCaution: 0.35,
     offensiveCooldown: 1.6,
     tension: 0.7,
     tacticalThink: 1.6,
     flanking: false,
+    aiStartForce: { add: [], remove: ['mbt'] },
   },
   normal: {
     id: 'normal',
@@ -41,17 +44,19 @@ export const DIFFICULTIES: Record<Difficulty, DifficultyDef> = {
     tension: 1,
     tacticalThink: 1,
     flanking: true,
+    aiStartForce: { add: [], remove: [] },
   },
   hard: {
     id: 'hard',
     name: 'Hard',
-    description: 'A ruthless rival: faster economy, bolder and more frequent offensives, quick tactical reactions.',
+    description: 'A ruthless rival: a stronger starting force, faster economy, bolder and more frequent offensives, quick tactical reactions.',
     aiIncome: 1.25,
     aiCaution: -0.15,
     offensiveCooldown: 0.7,
     tension: 1.25,
     tacticalThink: 0.75,
     flanking: true,
+    aiStartForce: { add: ['mbt', 'rifle_squad'], remove: [] },
   },
 };
 

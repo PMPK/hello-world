@@ -292,6 +292,11 @@ outposts and assaults on bases when its strike force is strong enough (garrison 
 counted) **and has the fuel to get there**; recalls forces to defend; beaten or dry forces return home to refit.
 The AI plays under the same **strategic fog of war** as the player: it only targets, pursues and reacts
 to forces inside its vision (bases, outposts, armies); bases and outposts are always known.
+**Recon patrols**: from day 3 a pair of fuelled jeeps roams watch points between the expeditions and
+around its outposts (keeping 36 km from your bases during the standoff, circling your base at war). At
+war a patrol cuts across the route of any convoy it sees, attacks forces much weaker than itself and
+slips home from anything stronger, or when low on fuel, ammunition or health. Patrols only go out while
+no offensive is ready, and are called home when their jeeps would complete a strike force.
 
 **Difficulty** (chosen on the main menu, stored per campaign; `src/data/difficulty.ts`):
 
@@ -302,6 +307,7 @@ to forces inside its vision (bases, outposts, armies); bases and outposts are al
 | Pause between offensives | ×1.6 | ×1 | ×0.7 |
 | Tension drift | ×0.7 | ×1 | ×1.25 |
 | Battlefield decisions | every 1.6 s, no flanking | 1.0 s | 0.75 s |
+| Rival's starting task force | no tank | standard | +1 tank, +1 rifle squad |
 
 ## 7. Persistence
 Versioned save envelope + state schema version with migrations, IndexedDB (localStorage fallback),

@@ -3,7 +3,7 @@ import { BUILDINGS, type BuildingTypeId, type SiteKind } from '../data/buildings
 import { FACTION_DEFS } from '../data/factions';
 import { canAfford } from '../data/resources';
 import { statsOf } from '../units/stats';
-import { formArmyFromGarrison, fuelRange, orderAttack, orderReturn, type AttackTarget } from '../campaign/armies';
+import { formArmyFromGarrison, fuelRange, orderAttack, orderMove, orderReturn, type AttackTarget } from '../campaign/armies';
 import {
   canBuildOutpost,
   OUTPOST_RANGE,
@@ -25,6 +25,7 @@ import {
   garrisonStrength,
   isOutpost,
   isVisibleToFaction,
+  PLAYER_VISION_RADIUS,
   relationOf,
   strengthOf,
 } from '../campaign/queries';
@@ -34,6 +35,12 @@ import type { AIState, Army, Base, CampaignState } from '../campaign/types';
 
 const THINK_INTERVAL = 1.5;
 const OFFENSIVE_COOLDOWN = 14;
+/** Hours between the launches of two recon patrols. */
+const PATROL_COOLDOWN = 20;
+/** While there is no war, patrols keep this far (km) from the other side's bases (loitering raises tension). */
+const PATROL_CLEARANCE = 36;
+/** Patrols range at most this far (km) from their home base. */
+const PATROL_RANGE = 110;
 const MAX_MILITARY_UNITS = 30;
 
 /** Strategic AI for non-player expeditions. Runs on its own schedule. */
@@ -440,9 +447,40 @@ function thinkMilitary(ctx: SimContext, ai: AIState): void {
   const armies = armiesOf(state, fid);
   const bases = basesOf(state, fid);
 
+  const offensiveOut = armies.some((a) => (a.aiRole === 'attack' || a.aiRole === 'raid') && a.order.type !== 'return');
+  const offensiveDue = hostile && !offensiveOut && state.time - ai.lastAttackLaunch >= OFFENSIVE_COOLDOWN * level.offensiveCooldown;
+  const plan = offensiveDue ? strikePlan(state, fid, bases, caution) : null;
+  if (offensiveDue && !plan) {
+    // an offensive that only lacks the scouts: call the patrol home
+    const patrol = armies.find((a) => a.aiRole === 'patrol' && a.order.type !== 'return');
+    if (patrol) {
+      const withScouts = bases.map((b) => (b.id === patrol.homeBaseId ? { ...b, garrison: [...b.garrison, ...patrol.units] } : b));
+      if (strikePlan(state, fid, withScouts, caution)) orderReturn(ctx, patrol.id);
+    }
+  }
+
+  // --- reconnaissance: a pair of jeeps watches the ground between the expeditions ---
+  // (only while no offensive is ready to go: scouts must not weaken a strike force)
+  if (!plan && bases.length && state.time > 24 * 3 && state.time - ai.lastPatrolAt > PATROL_COOLDOWN && !armies.some((a) => a.aiRole === 'patrol')) {
+    const home = bases.slice().sort((a, b) => scouts(b).length - scouts(a).length)[0];
+    const team = scouts(home).slice(0, 2);
+    if (team.length >= 2 || (team.length === 1 && home.garrison.length >= 4)) {
+      const patrol = formArmyFromGarrison(ctx, home.id, team.map((u) => u.id));
+      if (patrol) {
+        patrol.aiRole = 'patrol';
+        ai.lastPatrolAt = state.time;
+        armies.push(patrol);
+      }
+    }
+  }
+
   // --- manage field armies ---
   for (const army of armies) {
     if (!army.aiRole) army.aiRole = 'attack';
+    if (army.aiRole === 'patrol') {
+      thinkPatrol(ctx, army, hostile);
+      continue;
+    }
     const s = armyStrength(army);
     const lowAmmo = army.units.every((u) => {
       const st = statsOf(u.designId);
@@ -478,25 +516,8 @@ function thinkMilitary(ctx: SimContext, ai: AIState): void {
   }
 
   // --- offence ---
-  if (state.time - ai.lastAttackLaunch < OFFENSIVE_COOLDOWN * level.offensiveCooldown) return;
-  if (armies.some((a) => (a.aiRole === 'attack' || a.aiRole === 'raid') && a.order.type !== 'return')) return;
-  const home = bases.slice().sort((a, b) => strengthOf(b.garrison) - strengthOf(a.garrison))[0];
-  if (!home || home.garrison.length < 3) return;
-  const total = strengthOf(home.garrison);
-  // keep a home guard of roughly a third
-  const sorted = home.garrison.slice().sort((a, b) => statsOf(b.designId).power - statsOf(a.designId).power);
-  const guardIds = new Set<string>();
-  let guard = 0;
-  for (let i = sorted.length - 1; i >= 0 && guard < total * 0.3; i--) {
-    guardIds.add(sorted[i].id);
-    guard += strengthOf([sorted[i]]);
-  }
-  const strikeUnits = home.garrison.filter((u) => !guardIds.has(u.id));
-  if (strikeUnits.length < 2) return;
-  const strike = strengthOf(strikeUnits);
-  const target = pickTarget(state, fid, home.x, home.z, strike, caution, fuelRange(strikeUnits));
-  if (!target) return;
-  if (target.target.kind !== 'building' && strikeUnits.length < 5) return;
+  if (!plan) return;
+  const { home, units: strikeUnits, target } = plan;
   const army = formArmyFromGarrison(ctx, home.id, strikeUnits.map((u) => u.id));
   if (!army) return;
   army.aiRole = target.target.kind === 'building' ? 'raid' : 'attack';
@@ -507,6 +528,119 @@ function thinkMilitary(ctx: SimContext, ai: AIState): void {
   ai.lastAttackLaunch = state.time;
   ai.targetKind = target.target.kind;
   ai.targetId = target.target.id;
+}
+
+/** The offensive the AI could launch right now: strike force (all but a home guard of about a third) and target. */
+function strikePlan(state: CampaignState, fid: string, bases: Base[], caution: number): { home: Base; units: Base['garrison']; target: TargetOption } | null {
+  const home = bases.slice().sort((a, b) => strengthOf(b.garrison) - strengthOf(a.garrison))[0];
+  if (!home || home.garrison.length < 3) return null;
+  const total = strengthOf(home.garrison);
+  const sorted = home.garrison.slice().sort((a, b) => statsOf(b.designId).power - statsOf(a.designId).power);
+  const guardIds = new Set<string>();
+  let guard = 0;
+  for (let i = sorted.length - 1; i >= 0 && guard < total * 0.3; i--) {
+    guardIds.add(sorted[i].id);
+    guard += strengthOf([sorted[i]]);
+  }
+  const units = home.garrison.filter((u) => !guardIds.has(u.id));
+  if (units.length < 2) return null;
+  const target = pickTarget(state, fid, home.x, home.z, strengthOf(units), caution, fuelRange(units));
+  if (!target) return null;
+  if (target.target.kind !== 'building' && units.length < 5) return null;
+  return { home, units, target };
+}
+
+/** Fuelled light vehicles in a garrison, fit to scout. */
+function scouts(base: Base): Base['garrison'] {
+  return base.garrison.filter((u) => {
+    const st = statsOf(u.designId);
+    return st.family === 'light_vehicle' && u.fuel >= st.fuelCapacity * 0.7 && u.hp >= st.maxHp * 0.7;
+  });
+}
+
+/** Places worth watching: the ground between the expeditions, our outposts, and (at war) the rival's surroundings. */
+function patrolPoints(state: CampaignState, fid: string, home: Base, hostile: boolean): { x: number; z: number }[] {
+  const pts: { x: number; z: number }[] = [];
+  const rivals = Object.values(state.bases).filter((b) => b.factionId !== fid);
+  for (const eb of rivals) {
+    for (const f of [0.35, 0.5, 0.65]) pts.push({ x: home.x + (eb.x - home.x) * f, z: home.z + (eb.z - home.z) * f });
+    if (hostile) {
+      for (let k = 0; k < 6; k++) {
+        const a = (k / 6) * Math.PI * 2;
+        pts.push({ x: eb.x + Math.cos(a) * 30, z: eb.z + Math.sin(a) * 30 });
+      }
+    }
+  }
+  for (const b of Object.values(state.buildings)) {
+    if (b.typeId !== 'extractor' || b.state === 'destroyed' || !isOutpost(state, b)) continue;
+    if (b.factionId === fid) pts.push({ x: b.x + 6, z: b.z + 6 });
+    else if (hostile) pts.push({ x: b.x - 10, z: b.z - 10 });
+  }
+  return pts.filter((p) => {
+    if (dist(p.x, p.z, home.x, home.z) > PATROL_RANGE) return false;
+    if (!hostile && rivals.some((eb) => dist(p.x, p.z, eb.x, eb.z) < PATROL_CLEARANCE)) return false;
+    return true;
+  });
+}
+
+/**
+ * A recon patrol roams between watch points. At war it chases soft prey it
+ * can see (supply convoys, much weaker forces) and slips away from anything
+ * stronger; it heads home when low on fuel, ammunition or health.
+ */
+function thinkPatrol(ctx: SimContext, army: Army, hostile: boolean): void {
+  const { state, rng } = ctx;
+  const fid = army.factionId;
+  const home = (army.homeBaseId && state.bases[army.homeBaseId]?.factionId === fid ? state.bases[army.homeBaseId] : null) ?? basesOf(state, fid)[0];
+  if (!home || !armyReady(army)) {
+    if (army.order.type !== 'return' && home) orderReturn(ctx, army.id);
+    return;
+  }
+  if (army.order.type === 'return') return;
+  if (hostile) {
+    const s = armyStrength(army);
+    let threat = 0;
+    let prey: Army | null = null;
+    let preyD = 28;
+    for (const a of Object.values(state.armies)) {
+      if (a.factionId === fid || !areHostile(state, fid, a.factionId)) continue;
+      const d = dist(a.x, a.z, army.x, army.z);
+      if (d > PLAYER_VISION_RADIUS) continue; // only what the patrol itself can see
+      const as = armyStrength(a);
+      if (d < 30) threat += as;
+      if (as * 1.6 < s && d < preyD) {
+        preyD = d;
+        prey = a;
+      }
+    }
+    if (threat > s * 1.1) {
+      orderReturn(ctx, army.id);
+      return;
+    }
+    // convoys are soft targets: cut across their route
+    let best: { x: number; z: number } | null = null;
+    let bd = 26;
+    for (const c of Object.values(state.convoys)) {
+      if (c.factionId === fid || !areHostile(state, fid, c.factionId)) continue;
+      const d = dist(c.x, c.z, army.x, army.z);
+      if (d >= bd) continue;
+      bd = d;
+      const ahead = c.path[0];
+      best = ahead && dist(ahead.x, ahead.z, army.x, army.z) < d ? ahead : { x: c.x, z: c.z };
+    }
+    if (best) {
+      orderMove(ctx, army.id, best.x, best.z);
+      return;
+    }
+    if (prey) {
+      orderAttack(ctx, army.id, { kind: 'army', id: prey.id });
+      return;
+    }
+  }
+  if (army.order.type !== 'idle') return;
+  const pts = patrolPoints(state, fid, home, hostile).filter((p) => dist(p.x, p.z, army.x, army.z) > 12);
+  const next = pts.length ? pts[rng.int(0, pts.length - 1)] : null;
+  if (!next || !orderMove(ctx, army.id, next.x, next.z)) orderReturn(ctx, army.id);
 }
 
 function retarget(ctx: SimContext, army: Army, strength: number, caution: number): boolean {
