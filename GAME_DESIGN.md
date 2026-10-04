@@ -147,6 +147,9 @@ guns and is hard to hit but cannot engage infantry, and its exposed crew can be 
 Armed positions count towards base strength for AI planning, and a base is not taken while any of them
 still fights.
 
+Bases grow visibly on the map: camp blocks of prefab huts appear as the population rises (one per 4
+people) and garrisoned vehicles park beside the vehicle depot (or the HQ).
+
 ### 4.4b Expansion
 - **Found new base** (base panel): costs 160 ORE · 110 ALY · 30 CMP · 60 FOOD · 20 FUEL · 10 AMMO and 16
   colonists (12 must stay). The site must be 40–150 km away, at least 40 km from any base, dry, not too

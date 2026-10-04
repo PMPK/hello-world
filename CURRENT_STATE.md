@@ -62,6 +62,9 @@
   file or pasted text (validated + migrated), continue, reset.
 - **PWA**: manifest (fullscreen, landscape), generated icons, Workbox precache (offline), install prompt button.
 - **Quality settings**: low / medium / high (pixel ratio, shadows, tree density); FPS counter option.
+- **Living bases**: camp blocks of prefab huts fill in around the structures as the population grows
+  (one hut per 4 people), and garrisoned vehicles park in rows beside the vehicle depot or HQ (yours,
+  and the rival's while in sight; medium/high quality).
 - **Visual polish**: animated water shimmer (map and battlefield), dust trails behind moving vehicles
   (medium/high), persistent scorch marks where heavy rounds and vehicles exploded, base lamps that come
   on after dusk — each a single extra draw call at most.

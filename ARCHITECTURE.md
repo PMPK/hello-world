@@ -61,6 +61,8 @@ src/rendering/
   daylight.ts               time-of-day keyframes: sun/moon, hemisphere light, sky and fog colours
   water.ts                  animated water shimmer injected into MeshStandardMaterial (onBeforeCompile)
   nightLights.ts            additive instanced lamps around structures, faded in by darkness
+  settlement.ts             living bases: camp huts that grow with population, parked garrison vehicles
+                            (4 instanced meshes, rebuilt only when a base changes)
   overlay.ts                2D canvas overlay: NATO-style symbols, labels, bars, selection box
   models/                   ModelBuilder (low-poly primitives → one geometry with vertex colours), unit/building models, cache
 src/audio/audio.ts          procedural WebAudio (shared noise buffer + oscillators): spatial gunfire/explosions,

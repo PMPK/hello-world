@@ -15,6 +15,7 @@ import { buildRing, TANK_TURRET_HEIGHT } from './models/units';
 import { Daylight } from './daylight';
 import { shimmerWater, waterTime } from './water';
 import { NightLights, type LightSpot } from './nightLights';
+import { Settlements } from './settlement';
 import { makeLights, type GameRenderer } from './renderer';
 
 /** Model scales on the strategic map (models are authored in metres). */
@@ -77,6 +78,7 @@ export class CampaignView {
   private basesKey = '';
   private ghostRing: THREE.Mesh | null = null;
   private nightLights!: NightLights;
+  private settlements!: Settlements;
   private lightSpots: LightSpot[] = [];
   private lightTimer = 0;
   private water!: THREE.Mesh;
@@ -134,6 +136,7 @@ export class CampaignView {
     this.buildVegetation(world, state);
     this.basesKey = this.baseKeyOf(state);
     this.nightLights = new NightLights(this.scene, 0.16);
+    this.settlements = new Settlements(this.scene, (x, z) => this.h(x, z), CAMPAIGN_BUILDING_SCALE * 3.2, CAMPAIGN_VEHICLE_SCALE, gr.profile.effects >= 0.8);
 
     this.selRing = new THREE.Mesh(
       buildRing(0.9, 1, 48),
@@ -329,6 +332,7 @@ export class CampaignView {
         const r = def.battleFootprint * CAMPAIGN_BUILDING_SCALE * 0.62;
         this.lightSpots.push({ key: b.id, x: b.x, y: this.h(b.x, b.z) + 0.35, z: b.z, radius: r, count: b.typeId === 'hq' ? 4 : 2 });
       }
+      this.settlements.sync(state, (x, z) => isVisibleToFaction(state, this.playerFaction, x, z));
     }
     this.nightLights.update(this.lightSpots, this.daylight.dark);
     this.syncSites(state);
@@ -709,6 +713,7 @@ export class CampaignView {
 
   /** Rebuild terrain mesh and vegetation (after runtime terrain edits). */
   refreshTerrain(state: CampaignState): void {
+    this.settlements?.invalidate();
     this.scene.remove(this.terrainMesh);
     this.terrainMesh.geometry.dispose();
     (this.terrainMesh.material as THREE.Material).dispose();
@@ -923,6 +928,7 @@ export class CampaignView {
       }
     });
     this.damagedMat.dispose();
+    this.settlements.dispose();
   }
 }
 
