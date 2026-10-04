@@ -253,6 +253,56 @@ export function reinforceArmy(ctx: SimContext, armyId: string, unitIds?: string[
   return pick.length;
 }
 
+/** Task forces closer than this (map units) can merge. */
+export const MERGE_RANGE = 2.5;
+
+/**
+ * Detach some units into a new task force at the same spot. Rations are
+ * shared by head count; the new force gets its own commander and keeps the
+ * parent's post-battle cooldown. Returns null if the split would leave
+ * either force empty.
+ */
+export function splitArmy(ctx: SimContext, armyId: string, unitIds: string[]): Army | null {
+  const { state } = ctx;
+  const army = state.armies[armyId];
+  if (!army) return null;
+  const ids = new Set(unitIds);
+  const moving = army.units.filter((u) => ids.has(u.id));
+  if (!moving.length || moving.length >= army.units.length) return null;
+  const menAll = armyMen(army);
+  army.units = army.units.filter((u) => !ids.has(u.id));
+  let x = army.x + 0.9;
+  let z = army.z + 0.4;
+  if (!ctx.world.isPassable(x, z)) {
+    x = army.x;
+    z = army.z;
+  }
+  const fresh = createArmy(ctx, army.factionId, x, z, moving, army.homeBaseId);
+  const share = menAll > 0 ? armyMen(fresh) / menAll : 0.5;
+  fresh.food = army.food * share;
+  army.food -= fresh.food;
+  fresh.lastBattleTime = army.lastBattleTime;
+  fresh.aiRole = army.aiRole;
+  return fresh;
+}
+
+/** Fold `fromId` into `intoId` (same faction, close together, room for the units). */
+export function mergeArmies(ctx: SimContext, intoId: string, fromId: string): boolean {
+  const { state } = ctx;
+  const into = state.armies[intoId];
+  const from = state.armies[fromId];
+  if (!into || !from || into === from || into.factionId !== from.factionId) return false;
+  if (dist(into.x, into.z, from.x, from.z) > MERGE_RANGE) return false;
+  if (into.units.length + from.units.length > ARMY_MAX_UNITS) return false;
+  into.units.push(...from.units);
+  into.food = Math.min(maxRations(into), into.food + from.food);
+  into.lastBattleTime = Math.max(into.lastBattleTime, from.lastBattleTime);
+  from.units = [];
+  // the other commander joins the merged staff
+  removeArmy(state, from.id, { kind: 'army', id: into.id });
+  return true;
+}
+
 export function removeArmy(state: CampaignState, armyId: string, commanderTo: Character['location'] | null = null): void {
   const army = state.armies[armyId];
   if (!army) return;

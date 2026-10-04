@@ -40,6 +40,7 @@ export function makeBuilding(
     cycleProgress: 0,
     storage: {},
     queue: [],
+    repeat: null,
     siteId,
     enabled: true,
     repairing: false,

@@ -57,7 +57,8 @@ describe('persistence', () => {
     const c = freshCampaign();
     const raw = JSON.parse(JSON.stringify(c.state));
     delete raw.version;
-    expect(migrateState(raw).version).toBe(1);
+    // version-less states are treated as v1 and migrated forward to the current schema
+    expect(migrateState(raw).version).toBe(STATE_VERSION);
     expect(() => migrateState({ ...raw, version: STATE_VERSION + 1 })).toThrow(/newer/);
   });
 

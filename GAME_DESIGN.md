@@ -169,7 +169,8 @@ extra rations.
 - Formed from a base garrison (*Deploy task force*), up to 24 units. Each has a named **commander**
   (character data), units, rations, position, path/destination, speed (slowest unit × terrain), faction.
 - Orders: move, attack army (pursuit), attack base, attack outpost (capture), return, stop; garrison /
-  reinforce at a base.
+  reinforce at a base; split off chosen units into a new task force (rations shared by head count, new
+  commander); merge task forces within 2.5 km (up to 24 units; the other commander joins the staff).
 - Strategic fog of war: enemy forces are visible only near your bases, outposts and armies.
 - **Logistics**: near a friendly base units refill from the base stock (trucks load cargo 3× faster).
   Away from bases, supply trucks top up the neediest units (8 FUEL and 4 AMMO per truck-hour), never

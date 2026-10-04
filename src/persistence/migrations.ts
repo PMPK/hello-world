@@ -8,8 +8,13 @@ import { STATE_VERSION, type CampaignState } from '../campaign/types';
 type Migration = (s: Record<string, unknown>) => Record<string, unknown>;
 
 export const MIGRATIONS: Record<number, Migration> = {
-  // Example for the future:
-  // 1: (s) => ({ ...s, version: 2, newField: defaultValue }),
+  // v2: production buildings can repeat a unit order
+  1: (s) => {
+    const buildings = (s.buildings ?? {}) as Record<string, Record<string, unknown>>;
+    const out: Record<string, Record<string, unknown>> = {};
+    for (const [id, b] of Object.entries(buildings)) out[id] = { ...b, repeat: b.repeat ?? null };
+    return { ...s, buildings: out, version: 2 };
+  },
 };
 
 export function migrateState(raw: Record<string, unknown>): CampaignState {

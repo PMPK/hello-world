@@ -10,7 +10,7 @@ import type { ResearchState } from '../research/research';
  */
 
 /** Bump when the shape of CampaignState changes; add a migration in persistence/migrations.ts. */
-export const STATE_VERSION = 1;
+export const STATE_VERSION = 2;
 
 export interface UnitInstance {
   id: string;
@@ -101,6 +101,8 @@ export interface Building {
   /** Local buffer (extractor output waiting for a convoy). */
   storage: PartialStock;
   queue: ProductionOrder[];
+  /** Unit design re-queued automatically whenever the queue runs empty (null = off). Added in state v2. */
+  repeat: string | null;
   siteId: string | null;
   enabled: boolean;
   repairing: boolean;

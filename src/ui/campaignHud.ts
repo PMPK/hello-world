@@ -4,7 +4,7 @@ import { RESOURCES, STOCK_RESOURCES, canAfford, formatCost, type PartialStock } 
 import { UNIT_DESIGNS } from '../data/unitDesigns';
 import { campaignDay, formatCampaignTime, formatDuration, type SpeedSetting } from '../core/time';
 import { dist } from '../core/math';
-import { armyBaseSpeed, armyMen, armySupplies, fuelRange, maxRations } from '../campaign/armies';
+import { ARMY_MAX_UNITS, armyBaseSpeed, armyMen, armySupplies, fuelRange, maxRations, MERGE_RANGE } from '../campaign/armies';
 import { canBuildOutpost, canBuildType, OUTPOST_RANGE } from '../campaign/construction';
 import { affordability, designsFor, MAX_QUEUE } from '../campaign/production';
 import { basesOf, isOutpost, relationOf } from '../campaign/queries';
@@ -37,6 +37,9 @@ export interface CampaignController {
   armyReturn(id: string): void;
   armyGarrison(id: string): void;
   armyReinforce(id: string): void;
+  armySplit(id: string, unitIds: string[]): void;
+  armyMerge(intoId: string, fromId: string): void;
+  setRepeat(buildingId: string, designId: string | null): void;
   deployGarrison(baseId: string): void;
   beginPlacement(baseId: string, typeId: BuildingTypeId): void;
   confirmPlacement(): void;
@@ -621,9 +624,59 @@ export class CampaignHud {
       actions.append(btn('Garrison', () => this.c.armyGarrison(a.id)));
       if (atBase.garrison.length) actions.append(btn(`Reinforce (${atBase.garrison.length})`, () => this.c.armyReinforce(a.id)));
     }
+    if (a.units.length >= 2) {
+      const sb = btn('Split…', () => this.openSplit(a));
+      sb.dataset.testid = 'army-split';
+      actions.append(sb);
+    }
+    for (const other of Object.values(s.armies)) {
+      if (other.id === a.id || other.factionId !== a.factionId) continue;
+      if (dist(other.x, other.z, a.x, a.z) > MERGE_RANGE || other.units.length + a.units.length > ARMY_MAX_UNITS) continue;
+      const mb = btn(`Merge ${other.name}`, () => this.c.armyMerge(a.id, other.id));
+      mb.dataset.testid = 'army-merge';
+      actions.append(mb);
+    }
     body.append(actions);
     body.append(el('div', { class: 'hint', text: 'Tap terrain to move (right-click with a mouse). Tap an enemy force, base or outpost to attack. Forces resupply automatically near a friendly base.' }));
     return panel;
+  }
+
+  /** Choose units to detach into a new task force. */
+  private openSplit(a: Army): void {
+    const chosen = new Set<string>();
+    const list = el('div', 'list');
+    const confirm = btn('Split off 0 units', () => undefined, 'primary disabled');
+    const refresh = (): void => {
+      const n = chosen.size;
+      confirm.textContent = `Split off ${n} unit${n === 1 ? '' : 's'}`;
+      confirm.classList.toggle('disabled', n === 0 || n >= a.units.length);
+    };
+    for (const u of a.units) {
+      const row = unitRow(u);
+      row.classList.add('tap');
+      row.dataset.testid = 'split-unit';
+      row.addEventListener('click', () => {
+        if (chosen.has(u.id)) chosen.delete(u.id);
+        else chosen.add(u.id);
+        row.classList.toggle('picked', chosen.has(u.id));
+        refresh();
+      });
+      list.append(row);
+    }
+    const close = openModal(this.host, {
+      kicker: a.name,
+      title: 'Split task force',
+      body: [el('div', { class: 'hint', text: 'Tap the units that form the new task force. Rations are shared by head count; the new force gets its own commander.' }), list],
+      actions: [{ label: 'Cancel', onClick: () => undefined }],
+      dismissable: true,
+    });
+    confirm.addEventListener('click', () => {
+      if (!chosen.size || chosen.size >= a.units.length) return;
+      close();
+      this.c.armySplit(a.id, [...chosen]);
+    });
+    confirm.dataset.testid = 'split-confirm';
+    list.after(el('div', 'actions', confirm));
   }
 
   private basePanel(b: Base): HTMLElement {
@@ -841,6 +894,14 @@ export class CampaignHud {
           if (!aff.ok) b.title = aff.reason;
           r.append(b);
         }
+        const rseg = el('div', 'seg');
+        for (const d of [null, ...designsFor(x, s)]) {
+          const on = (x.repeat ?? null) === d;
+          const rb = btn(d ? UNIT_DESIGNS[d].short : 'Off', () => this.c.setRepeat(x.id, d), `small ${on ? 'active' : ''}`);
+          rb.dataset.testid = `repeat-${d ?? 'off'}`;
+          rseg.append(rb);
+        }
+        r.append(el('div', { class: 'label', text: 'Continuous production', style: { marginTop: '4px' } }), rseg);
         if (x.queue.length) {
           const q = el('div', 'list');
           x.queue.forEach((o, i) => {

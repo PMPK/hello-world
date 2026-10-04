@@ -20,8 +20,9 @@
 - **Defences**: MG bunker and AT gun emplacement — crewed from the workforce, supplied from base AMMO,
   fight on their own in any battle at their base (traversing AT gun, armour/profile/crew exposure),
   lose crew when hit or destroyed; counted in base strength; the AI fortifies when tension rises.
-- **Units**: rifle squads, recon jeeps, main battle tanks derived from modular components; production
-  consumes people + materials; garrison → task force deployment; garrison/reinforce at bases.
+- **Units**: rifle squads, recon jeeps, main battle tanks and supply trucks derived from modular components;
+  production consumes people + materials, with **continuous production** (repeat a design); garrison →
+  task force deployment; garrison/reinforce at bases; **split** a task force and **merge** nearby ones.
 - **Armies**: pathfinding on terrain/roads, rations, fuel consumption, resupply near bases, attack/pursuit,
   return; named commanders. **Supply trucks** keep task forces fuelled and armed in the field (pooled fuel
   range, extra rations, cargo shown in the army panel) and rearm nearby units in battle.
@@ -49,8 +50,10 @@
   acknowledgements, radio chirps for reports, contact alarm, wind ambience; Sound Off/Low/Medium/High in
   settings, M to mute.
 - **Auto-resolve** runs in time slices with a progress dialog (no main-thread freeze on phones).
-- **Tests**: 53 Vitest unit tests; Playwright smoke tests on phone-landscape touch and desktop mouse profiles
-  (full loop incl. unit card, save/continue, save-slot listing and import; fortified base assault).
+- **Tests**: 57 Vitest unit tests; Playwright smoke tests on phone-landscape touch and desktop mouse profiles
+  (full loop incl. unit card, save/continue, save-slot listing and import; fortified base assault;
+  task force split/merge).
+- **Save schema v2** (Building.repeat) with a v1 → v2 migration.
 - **Deployment**: GitHub Actions CI + Pages deploy workflow (gh-pages branch). A single-file build is also
   published as a claude.ai Artifact (https://claude.ai/artifact/7qGUMq5vWjnaNKRHEyempW).
 

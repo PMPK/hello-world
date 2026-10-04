@@ -201,3 +201,31 @@ test('base assault battle contains the base buildings', async ({ page }) => {
   for (const id of campaignBuildings) expect(battleBuildings).toContain(id);
   expect(errors).toEqual([]);
 });
+
+test('split a task force and merge it back from the army panel', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto('/');
+  await page.getByTestId('new-campaign').click();
+  await page.getByTestId('intro-skip').click();
+  await expect(page.getByTestId('menu')).toBeVisible();
+  await page.getByTestId('speed-0').click();
+  const count = (): Promise<number> =>
+    px(page, (p) => Object.values(p.state().armies as Record<string, any>).filter((a: any) => a.factionId === p.state().playerFactionId).length);
+  expect(await count()).toBe(1);
+  await px(page, (p) => {
+    const s = p.state();
+    const a = Object.values(s.armies as Record<string, any>).find((x: any) => x.factionId === s.playerFactionId);
+    p.app.campaign.select({ kind: 'army', id: a.id });
+  });
+  await page.getByTestId('army-split').click();
+  const rows = page.getByTestId('split-unit');
+  await rows.nth(0).click();
+  await rows.nth(1).click();
+  await page.getByTestId('split-confirm').click();
+  expect(await count()).toBe(2);
+  // the new force is selected; merge it back into its parent
+  await page.getByTestId('army-merge').first().click();
+  expect(await count()).toBe(1);
+  expect(errors).toEqual([]);
+});

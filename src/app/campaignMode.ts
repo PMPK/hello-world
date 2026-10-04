@@ -7,10 +7,12 @@ import {
   formArmyFromGarrison,
   fuelRange,
   garrisonArmy,
+  mergeArmies,
   orderAttack,
   orderMove,
   orderReturn,
   reinforceArmy,
+  splitArmy,
   stopArmy,
 } from '../campaign/armies';
 import {
@@ -99,6 +101,37 @@ export class CampaignMode implements Mode, CampaignController {
 
   sound(kind: 'radio' | 'alert' | 'confirm'): void {
     this.app.audio.ui(kind);
+  }
+
+  armySplit(id: string, unitIds: string[]): void {
+    const fresh = splitArmy(this.ctx, id, unitIds);
+    if (!fresh) {
+      this.hud.toast('Choose some, but not all, of the units.', 'warn');
+      return;
+    }
+    this.hud.toast(`${fresh.name} formed with ${fresh.units.length} unit(s).`, 'econ');
+    this.select({ kind: 'army', id: fresh.id });
+  }
+
+  armyMerge(intoId: string, fromId: string): void {
+    const from = this.state.armies[fromId]?.name ?? 'Task force';
+    if (!mergeArmies(this.ctx, intoId, fromId)) {
+      this.hud.toast('Task forces must be close together, with room for all units.', 'warn');
+      return;
+    }
+    this.hud.toast(`${from} merged into ${this.state.armies[intoId]?.name ?? 'the task force'}.`, 'econ');
+    this.select({ kind: 'army', id: intoId });
+  }
+
+  setRepeat(buildingId: string, designId: string | null): void {
+    const b = this.state.buildings[buildingId];
+    if (!b) return;
+    b.repeat = designId;
+    if (designId && b.queue.length === 0) {
+      const r = queueUnit(this.state, buildingId, designId);
+      if (!r.ok) this.hud.toast(r.reason, 'warn');
+    }
+    this.hud.update(true);
   }
 
   resume(): void {

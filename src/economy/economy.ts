@@ -11,7 +11,7 @@ import {
 } from '../data/resources';
 import { UNIT_DESIGNS } from '../data/unitDesigns';
 import { statsOf } from '../units/stats';
-import { log, type SimContext } from '../campaign/context';
+import { log, newId, type SimContext } from '../campaign/context';
 import { buildingsOfBase } from '../campaign/queries';
 import { createUnit, syncInfantryMen } from '../campaign/units';
 import type { Base, Building, CampaignState } from '../campaign/types';
@@ -444,6 +444,10 @@ function stepUnitProduction(ctx: SimContext, base: Base, b: Building, eff: numbe
     base.garrison.push(unit);
     if (state.factions[base.factionId]?.isPlayer) {
       log(state, `${design.name} ready at ${base.name}.`, 'econ', base.factionId);
+    }
+    // continuous production: start the next one (it waits for people and materials as usual)
+    if (b.repeat && b.queue.length === 0 && UNIT_DESIGNS[b.repeat]) {
+      b.queue.push({ id: newId(state, 'o'), designId: b.repeat, progress: 0, started: false });
     }
   }
 }

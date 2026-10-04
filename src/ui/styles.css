@@ -363,6 +363,10 @@ body {
 .item.tap {
   cursor: pointer;
 }
+.item.picked {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
 .item.tap:active {
   background: rgba(255, 255, 255, 0.08);
 }
