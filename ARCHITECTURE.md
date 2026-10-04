@@ -112,6 +112,11 @@ This mapping is generic: new building types or unit designs need no battle-speci
   baked into one geometry (+ shared banner parts); settlements are 4 instanced meshes.
 - Labels and symbols are drawn on a 2D canvas overlay (no DOM churn). HUD DOM refreshes at 4–5 Hz and
   skips rebuilding while a finger is down or the panel scrolls.
+- Simulation cost is small next to rendering: the largest test battle (30 vs 30 units, `npm run
+  sim:battle`, "big 30 vs 30") takes ≈ 0.26 ms per 0.1 s sub-step in Node on a desktop CPU. At 2× battle
+  speed that is one sub-step every three frames, so even a phone several times slower stays well under
+  2 ms per frame; the battle stays on the main thread for now. A 30-day headless campaign without battles
+  runs in about a second.
 
 ## Input
 `PointerInput` unifies mouse/touch/pen. Touch: tap = select/command (context), 1-finger drag = pan,

@@ -156,7 +156,8 @@ is listed per day), `npm run sim:battle` (`ONLY=<label>` filters matrix lines), 
 3. **Battle**: infantry capturing enemy structures; infantry garrisoning bunkers (extra crew); garrisoned
    squads firing from the building edge instead of its centre.
 4. **Base specialisation** (e.g. mining town, fortress, depot) on top of the existing per-base economy.
-5. **Performance**: battle simulation in a Web Worker; spatial hash for targeting; profile on a real phone.
+5. **Performance**: profile on a real phone (rendering is the main cost; the battle simulation measures
+   ≈ 0.26 ms per sub-step for 60 units, see ARCHITECTURE.md, so a Web Worker is not needed yet).
 6. **Audio polish**: distant battle rumble on the campaign map, per-faction radio voices, more musical variety
    (`src/audio/music.ts`).
 7. **Guided first hour** on top of the directive system (`CampaignHud.updateDirective`) and the battle tips
