@@ -26,6 +26,8 @@ interface Puff {
   c1: THREE.Color;
 }
 
+const UP = new THREE.Vector3(0, 1, 0);
+
 const TRACER_COLORS: Record<WeaponClass, number> = {
   small_arms: 0xffe08a,
   mg: 0xffd070,
@@ -46,8 +48,13 @@ export class Effects {
   private linePos: Float32Array;
   private lineCol: Float32Array;
   private puffMesh: THREE.InstancedMesh;
+  /** Persistent ground scorch marks (ring buffer, one draw call). */
+  private scorchMesh: THREE.InstancedMesh;
+  private scorchNext = 0;
+  private pendingScorch: { x: number; y: number; z: number; size: number; t: number }[] = [];
   private readonly maxTracers: number;
   private readonly maxPuffs: number;
+  private readonly maxScorch: number;
   private time = 0;
   private tmpM = new THREE.Matrix4();
   private tmpC = new THREE.Color();
@@ -79,6 +86,30 @@ export class Effects {
     this.puffMesh.count = 0;
     this.puffMesh.frustumCulled = false;
     this.group.add(this.puffMesh);
+
+    this.maxScorch = Math.max(16, Math.round(90 * quality));
+    const disc = new THREE.CircleGeometry(1, 9);
+    disc.rotateX(-Math.PI / 2);
+    this.scorchMesh = new THREE.InstancedMesh(
+      disc,
+      new THREE.MeshBasicMaterial({ color: 0x1d1a16, transparent: true, opacity: 0.5, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
+      this.maxScorch,
+    );
+    this.scorchMesh.count = 0;
+    this.scorchMesh.frustumCulled = false;
+    this.scorchMesh.renderOrder = 1;
+    this.group.add(this.scorchMesh);
+  }
+
+  /** Blackened ground where a heavy round or vehicle exploded (appears after `delay`). */
+  scorch(x: number, groundY: number, z: number, size: number, delay = 0): void {
+    this.pendingScorch.push({ x, y: groundY + 0.06, z, size, t: this.time + delay });
+  }
+
+  /** Dust kicked up behind a moving vehicle; skipped when the pool is busy with combat effects. */
+  dust(x: number, y: number, z: number, size: number): void {
+    if (this.puffs.length > this.maxPuffs * 0.55) return;
+    this.puff(x, y, z, size, 1.5, 1.1, 0xb4a586, 0xa59a86);
   }
 
   shot(weapon: WeaponClass, ax: number, ay: number, az: number, bx: number, by: number, bz: number, travel: number): void {
@@ -117,6 +148,24 @@ export class Effects {
 
   update(dt: number): void {
     this.time += dt;
+    // scorch marks land when the round does
+    if (this.pendingScorch.length) {
+      const due = this.pendingScorch.filter((p) => p.t <= this.time);
+      if (due.length) {
+        this.pendingScorch = this.pendingScorch.filter((p) => p.t > this.time);
+        for (const p of due) {
+          const k = this.scorchNext++ % this.maxScorch;
+          const s = p.size * (1.6 + ((k * 37) % 10) / 12);
+          this.tmpQ.setFromAxisAngle(UP, k * 2.39);
+          this.tmpS.set(s, 1, s * 0.8);
+          this.tmpP.set(p.x, p.y, p.z);
+          this.tmpM.compose(this.tmpP, this.tmpQ, this.tmpS);
+          this.scorchMesh.setMatrixAt(k, this.tmpM);
+          this.scorchMesh.count = Math.min(this.maxScorch, Math.max(this.scorchMesh.count, k + 1));
+        }
+        this.scorchMesh.instanceMatrix.needsUpdate = true;
+      }
+    }
     // tracers
     let n = 0;
     const alive: Tracer[] = [];
@@ -177,5 +226,7 @@ export class Effects {
   dispose(): void {
     this.lineGeo.dispose();
     this.puffMesh.geometry.dispose();
+    this.scorchMesh.geometry.dispose();
+    (this.scorchMesh.material as THREE.Material).dispose();
   }
 }

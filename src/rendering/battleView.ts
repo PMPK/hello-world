@@ -10,6 +10,8 @@ import { bHeight, type BattleTerrain } from '../battle/terrain';
 import type { BUnit, SideIndex } from '../battle/types';
 import { CameraRig } from '../input/cameraRig';
 import { Effects } from './effects';
+import { shimmerWater, waterTime } from './water';
+import { NightLights } from './nightLights';
 import { Materials } from './models/builder';
 import { Models } from './models/cache';
 import { buildRing, TANK_TURRET_HEIGHT } from './models/units';
@@ -49,6 +51,8 @@ export class BattleView {
   private sides: [SideMeshes, SideMeshes];
   private buildingObjs = new Map<number, { obj: THREE.Object3D; key: string }>();
   private turretObjs = new Map<number, THREE.Mesh>();
+  private dustTimer = 0;
+  private nightLights!: NightLights;
   private selRings: THREE.InstancedMesh;
   private time = 0;
   private damagedMat = new THREE.MeshLambertMaterial({ vertexColors: true, color: 0x8f7d72 });
@@ -92,6 +96,7 @@ export class BattleView {
     this.buildVegetation();
     this.effects = new Effects(gr.profile.effects);
     this.scene.add(this.effects.group);
+    this.nightLights = new NightLights(this.scene, 0.8);
 
     const counts = [0, 1].map((s) => {
       const c = { inf: 0, jeep: 0, tank: 0, truck: 0 };
@@ -233,7 +238,7 @@ export class BattleView {
     if (t.water.some((w) => w === 1)) {
       const water = new THREE.Mesh(
         new THREE.PlaneGeometry(t.size * 6, t.size * 6),
-        new THREE.MeshStandardMaterial({ color: 0x2f6a80, roughness: 0.25, metalness: 0.05, transparent: true, opacity: 0.82 }),
+        shimmerWater(new THREE.MeshStandardMaterial({ color: 0x2f6a80, roughness: 0.25, metalness: 0.05, transparent: true, opacity: 0.82 }), 0.08),
       );
       water.rotation.x = -Math.PI / 2;
       water.position.set(t.size / 2, 0, t.size / 2);
@@ -355,8 +360,22 @@ export class BattleView {
       } else if (ev.type === 'explosion') {
         this.effects.explosion(ev.x, ev.y, ev.z, ev.size, ev.delay);
         this.sound?.explosion(ev.x, ev.y, ev.z, ev.size, ev.delay);
+        const ground = bHeight(this.t, ev.x, ev.z);
+        if (ev.y - ground < 3) this.effects.scorch(ev.x, ground, ev.z, ev.size, ev.delay);
       } else if (ev.type === 'building_destroyed') {
         this.syncBuildings();
+      }
+    }
+    // dust behind moving vehicles (not in forests; medium/high quality)
+    this.dustTimer -= dt;
+    if (this.dustTimer <= 0 && this.gr.profile.effects >= 0.7) {
+      this.dustTimer = 0.3;
+      for (const u of sim.units) {
+        if (!u.alive || u.reserve || u.retreated || !u.stats.isVehicle || u.speedNow < 3 || u.inForest) continue;
+        if (!this.visibleToPlayer(u)) continue;
+        const bx = u.x - Math.sin(u.heading) * u.stats.size * 0.7;
+        const bz = u.z - Math.cos(u.heading) * u.stats.size * 0.7;
+        this.effects.dust(bx, bHeight(this.t, bx, bz) + 0.6, bz, u.stats.family === 'tank' ? 1.9 : 1.3);
       }
     }
     // smoke from wrecks and burning buildings
@@ -376,6 +395,12 @@ export class BattleView {
       }
     }
     this.syncBuildings();
+    this.nightLights.update(
+      sim.buildings
+        .filter((b) => !b.destroyed && b.spec.state === 'active')
+        .map((b) => ({ key: String(b.id), x: b.x, y: bHeight(this.t, b.x, b.z) + 4.5, z: b.z, radius: b.radius * 0.72, count: b.spec.typeId === 'hq' ? 6 : 3 })),
+      this.daylight.dark,
+    );
     for (const [id, gun] of this.turretObjs) {
       const b = sim.buildingById(id);
       if (b?.defense) gun.rotation.y = b.defense.turret - b.rot;
@@ -486,6 +511,7 @@ export class BattleView {
 
   update(dt: number): void {
     this.rig.update(dt);
+    waterTime.value += dt;
     const d = this.rig.dist;
     const fog = this.scene.fog as THREE.Fog;
     fog.near = d * 1.6 + 150;

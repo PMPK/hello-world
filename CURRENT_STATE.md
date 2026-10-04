@@ -49,6 +49,9 @@
   file or pasted text (validated + migrated), continue, reset.
 - **PWA**: manifest (fullscreen, landscape), generated icons, Workbox precache (offline), install prompt button.
 - **Quality settings**: low / medium / high (pixel ratio, shadows, tree density); FPS counter option.
+- **Visual polish**: animated water shimmer (map and battlefield), dust trails behind moving vehicles
+  (medium/high), persistent scorch marks where heavy rounds and vehicles exploded, base lamps that come
+  on after dusk — each a single extra draw call at most.
 - **Audio**: procedural WebAudio — positional gunfire per weapon class, cannon/explosion booms, order
   acknowledgements, radio chirps for reports, contact alarm, wind ambience; Sound Off/Low/Medium/High in
   settings, M to mute.

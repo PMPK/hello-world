@@ -56,7 +56,11 @@ src/rendering/
   renderer.ts               WebGLRenderer + quality profiles + light rig
   campaignView.ts           strategic map scene: terrain mesh, water, instanced trees, roads, bases, armies, convoys, picking
   battleView.ts             battlefield scene: terrain, forests, buildings, instanced units per faction, selection rings
-  effects.ts                pooled tracers (1 draw call) and flashes/explosions/smoke (1 instanced draw call)
+  effects.ts                pooled tracers (1 draw call), flashes/explosions/smoke/dust (1 instanced draw call),
+                            scorch-mark ring buffer (1 instanced draw call)
+  daylight.ts               time-of-day keyframes: sun/moon, hemisphere light, sky and fog colours
+  water.ts                  animated water shimmer injected into MeshStandardMaterial (onBeforeCompile)
+  nightLights.ts            additive instanced lamps around structures, faded in by darkness
   overlay.ts                2D canvas overlay: NATO-style symbols, labels, bars, selection box
   models/                   ModelBuilder (low-poly primitives → one geometry with vertex colours), unit/building models, cache
 src/audio/audio.ts          procedural WebAudio (shared noise buffer + oscillators): spatial gunfire/explosions,

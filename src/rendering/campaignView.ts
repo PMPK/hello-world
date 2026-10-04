@@ -13,6 +13,8 @@ import { Materials } from './models/builder';
 import { Models } from './models/cache';
 import { buildRing, TANK_TURRET_HEIGHT } from './models/units';
 import { Daylight } from './daylight';
+import { shimmerWater, waterTime } from './water';
+import { NightLights, type LightSpot } from './nightLights';
 import { makeLights, type GameRenderer } from './renderer';
 
 /** Model scales on the strategic map (models are authored in metres). */
@@ -74,6 +76,9 @@ export class CampaignView {
   private vegetation: THREE.InstancedMesh[] = [];
   private basesKey = '';
   private ghostRing: THREE.Mesh | null = null;
+  private nightLights!: NightLights;
+  private lightSpots: LightSpot[] = [];
+  private lightTimer = 0;
   private water!: THREE.Mesh;
   private buildingObjs = new Map<string, { obj: THREE.Object3D; key: string }>();
   private armyObjs = new Map<string, ArmyVisual>();
@@ -128,6 +133,7 @@ export class CampaignView {
     this.buildWater();
     this.buildVegetation(world, state);
     this.basesKey = this.baseKeyOf(state);
+    this.nightLights = new NightLights(this.scene, 0.16);
 
     this.selRing = new THREE.Mesh(
       buildRing(0.9, 1, 48),
@@ -223,7 +229,7 @@ export class CampaignView {
     const wg = new THREE.PlaneGeometry(s * 5, s * 5, 1, 1);
     this.water = new THREE.Mesh(
       wg,
-      new THREE.MeshStandardMaterial({ color: 0x2c6a82, roughness: 0.22, metalness: 0.05, transparent: true, opacity: 0.8 }),
+      shimmerWater(new THREE.MeshStandardMaterial({ color: 0x2c6a82, roughness: 0.22, metalness: 0.05, transparent: true, opacity: 0.8 }), 0.9),
     );
     this.water.rotation.x = -Math.PI / 2;
     this.water.position.set(s / 2, 0, s / 2);
@@ -313,6 +319,18 @@ export class CampaignView {
     }
     this.syncRoads(state);
     this.syncBuildings(state);
+    this.lightTimer -= dt;
+    if (this.lightTimer <= 0) {
+      this.lightTimer = 0.5;
+      this.lightSpots = [];
+      for (const b of Object.values(state.buildings)) {
+        if (b.state !== 'active') continue;
+        const def = BUILDINGS[b.typeId];
+        const r = def.battleFootprint * CAMPAIGN_BUILDING_SCALE * 0.62;
+        this.lightSpots.push({ key: b.id, x: b.x, y: this.h(b.x, b.z) + 0.35, z: b.z, radius: r, count: b.typeId === 'hq' ? 4 : 2 });
+      }
+    }
+    this.nightLights.update(this.lightSpots, this.daylight.dark);
     this.syncSites(state);
     this.syncPerimeters(state);
     this.syncArmies(state, dt);
@@ -747,6 +765,7 @@ export class CampaignView {
 
   update(dt: number): void {
     this.rig.update(dt);
+    waterTime.value += dt;
     const d = this.rig.dist;
     const fog = this.scene.fog as THREE.Fog;
     fog.near = d * 1.4 + 20;
