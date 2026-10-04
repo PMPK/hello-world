@@ -236,6 +236,9 @@ counted) **and has the fuel to get there**; recalls forces to defend; beaten or 
 ## 7. Persistence
 Versioned save envelope + state schema version with migrations, IndexedDB (localStorage fallback),
 autosave every 2 minutes (configurable), on hiding the app, and around battles.
+Slots: autosave plus three manual slots (pause menu → Save game). Load game lists them (load/delete) and
+imports a save from a file or pasted text; Save game can export the current campaign as a JSON file or
+copy it to the clipboard, so campaigns can be backed up or moved between devices.
 
 ## 8. Future systems (architected, not implemented)
 - **Player character** (`src/characters`): Character, Commander, ArmyCommander, PlayerCharacter with a

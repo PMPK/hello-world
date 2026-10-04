@@ -41,15 +41,16 @@
 - **Results**: casualties, rescued crews returning to population, damage/ammo/fuel persisted, buildings
   destroyed/damaged, base and outpost capture, loser retreats, stats and log.
 - **Saves**: IndexedDB (fallbacks), versioned envelope + migrations, autosave (timer, app hidden, battles),
-  manual save, continue, reset.
+  three manual slots, Load game (load/delete per slot), export to a file or clipboard and import from a
+  file or pasted text (validated + migrated), continue, reset.
 - **PWA**: manifest (fullscreen, landscape), generated icons, Workbox precache (offline), install prompt button.
 - **Quality settings**: low / medium / high (pixel ratio, shadows, tree density); FPS counter option.
 - **Audio**: procedural WebAudio — positional gunfire per weapon class, cannon/explosion booms, order
   acknowledgements, radio chirps for reports, contact alarm, wind ambience; Sound Off/Low/Medium/High in
   settings, M to mute.
 - **Auto-resolve** runs in time slices with a progress dialog (no main-thread freeze on phones).
-- **Tests**: 51 Vitest unit tests; Playwright smoke tests on phone-landscape touch and desktop mouse profiles
-  (full loop incl. unit card, save/continue; fortified base assault).
+- **Tests**: 53 Vitest unit tests; Playwright smoke tests on phone-landscape touch and desktop mouse profiles
+  (full loop incl. unit card, save/continue, save-slot listing and import; fortified base assault).
 - **Deployment**: GitHub Actions CI + Pages deploy workflow (gh-pages branch). A single-file build is also
   published as a claude.ai Artifact (https://claude.ai/artifact/7qGUMq5vWjnaNKRHEyempW).
 

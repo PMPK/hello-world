@@ -6,8 +6,21 @@ import type { KVStore } from './kvstore';
 
 /** Envelope format version (independent from the state schema version). */
 export const SAVE_FORMAT_VERSION = 1;
-export const SAVE_SLOTS = ['autosave', 'manual'] as const;
+/** 'manual' is the first manual slot (kept for compatibility with older saves). */
+export const SAVE_SLOTS = ['autosave', 'manual', 'slot2', 'slot3'] as const;
 export type SaveSlot = (typeof SAVE_SLOTS)[number];
+export const MANUAL_SLOTS: SaveSlot[] = ['manual', 'slot2', 'slot3'];
+
+export function slotLabel(slot: SaveSlot): string {
+  return slot === 'autosave' ? 'Autosave' : slot === 'manual' ? 'Slot 1' : slot === 'slot2' ? 'Slot 2' : 'Slot 3';
+}
+
+/** File name for an exported save, e.g. planet-x-day12-20260104-1830.json */
+export function exportFileName(state: CampaignState, now = new Date()): string {
+  const p = (n: number): string => String(n).padStart(2, '0');
+  const stamp = `${now.getFullYear()}${p(now.getMonth() + 1)}${p(now.getDate())}-${p(now.getHours())}${p(now.getMinutes())}`;
+  return `planet-x-day${campaignDay(state.time)}-${stamp}.json`;
+}
 
 export interface SaveSummary {
   day: number;
@@ -119,7 +132,26 @@ export class SaveManager {
     return l[0] ?? null;
   }
 
+  async delete(slot: SaveSlot): Promise<void> {
+    await this.store.delete(`save:${slot}`);
+  }
+
   async clear(): Promise<void> {
     for (const slot of SAVE_SLOTS) await this.store.delete(`save:${slot}`);
+  }
+
+  /** Portable JSON for a save file (same envelope as stored saves). */
+  exportJson(state: CampaignState): string {
+    return serializeSave(state, 'manual');
+  }
+
+  /**
+   * Validate + migrate an imported save file and store it as the autosave so
+   * Continue picks it up. Throws with a readable message on bad input.
+   */
+  async importJson(json: string): Promise<SaveGame> {
+    const save = deserializeSave(json.trim());
+    await this.save(save.state, 'autosave');
+    return save;
   }
 }

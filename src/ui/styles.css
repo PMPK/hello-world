@@ -1204,3 +1204,32 @@ body {
     min-width: 0;
   }
 }
+
+/* ---------- saves ---------- */
+.save-row .name {
+  display: block;
+}
+.save-row .meta {
+  display: block;
+  white-space: normal;
+}
+.save-row .btn {
+  flex: none;
+}
+.save-paste {
+  width: 100%;
+  min-height: 44px;
+  margin-top: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  color: var(--text);
+  font: 11px var(--mono);
+  padding: 6px 8px;
+  resize: vertical;
+  user-select: text;
+  -webkit-user-select: text;
+}
+.hint.bad {
+  color: var(--danger);
+}

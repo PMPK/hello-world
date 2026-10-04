@@ -62,6 +62,7 @@ export function confirmModal(root: HTMLElement, title: string, text: string, okL
 export interface MainMenuActions {
   onContinue: (() => void) | null;
   onNew: () => void;
+  onLoad: () => void;
   onSettings: () => void;
   onReset: (() => void) | null;
   onFullscreen: (() => void) | null;
@@ -81,6 +82,9 @@ export function mainMenu(root: HTMLElement, latest: SaveInfo | null, a: MainMenu
   const nb = btn('New Campaign', a.onNew, latest ? '' : 'primary');
   nb.dataset.testid = 'new-campaign';
   inner.append(nb);
+  const lb = btn(latest ? 'Load Game' : 'Import Save', a.onLoad);
+  lb.dataset.testid = 'load-game';
+  inner.append(lb);
   inner.append(btn('Settings', a.onSettings));
   if (a.onFullscreen) inner.append(btn('Fullscreen', a.onFullscreen));
   if (a.onInstall) inner.append(btn('Install App', a.onInstall));

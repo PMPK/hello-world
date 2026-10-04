@@ -9,7 +9,8 @@ import type { CampaignState } from '../campaign/types';
 import type { World } from '../world/world';
 import type { BattleResult, BattleSetup } from '../battle/types';
 import { openStore } from '../persistence/kvstore';
-import { SaveManager, type SaveInfo, type SaveSlot } from '../persistence/save';
+import { exportFileName, SaveManager, slotLabel, type SaveInfo, type SaveSlot } from '../persistence/save';
+import { downloadText, loadGameModal, saveGameModal } from '../ui/saves';
 import { GameRenderer } from '../rendering/renderer';
 import { Overlay } from '../rendering/overlay';
 import { CampaignView } from '../rendering/campaignView';
@@ -210,6 +211,7 @@ export class App {
           confirmModal(this.ui, 'Start a new campaign?', 'Your current campaign save will be overwritten by the next save.', 'New campaign', () => this.newCampaign(), true);
         } else this.newCampaign();
       },
+      onLoad: () => void this.openLoadMenu(),
       onSettings: () => settingsModal(this.ui, this.settings, (s) => this.applySettings(s)),
       onReset: latest
         ? () =>
@@ -224,6 +226,69 @@ export class App {
             this.installPrompt = null;
           }
         : null,
+    });
+  }
+
+  private async openLoadMenu(): Promise<void> {
+    let saves: SaveInfo[] = [];
+    try {
+      saves = await this.saves.list();
+    } catch {
+      saves = [];
+    }
+    loadGameModal(this.ui, saves, {
+      onLoad: (slot) => void this.loadSlot(slot),
+      onDelete: (slot) =>
+        confirmModal(this.ui, `Delete ${slotLabel(slot)}?`, 'This saved campaign will be permanently removed from this browser.', 'Delete', () => {
+          void this.saves.delete(slot).then(() => this.showMenu());
+        }, true),
+      onImport: async (json) => {
+        try {
+          const save = await this.saves.importJson(json);
+          this.enterCampaign(save.state, worldForState(save.state));
+          return null;
+        } catch (err) {
+          return err instanceof Error ? err.message : 'Import failed.';
+        }
+      },
+    });
+  }
+
+  private async loadSlot(slot: SaveSlot): Promise<void> {
+    try {
+      const save = await this.saves.load(slot);
+      if (save) this.enterCampaign(save.state, worldForState(save.state));
+    } catch (err) {
+      openModal(this.ui, {
+        title: 'Could not load save',
+        body: [err instanceof Error ? err.message : String(err)],
+        actions: [{ label: 'OK', onClick: () => undefined }],
+      });
+    }
+  }
+
+  /** Pause menu → Save game: pick a slot or export a portable save. */
+  private async openSaveMenu(resume: () => void): Promise<void> {
+    const c = this.campaign;
+    if (!c) return;
+    let saves: SaveInfo[] = [];
+    try {
+      saves = await this.saves.list();
+    } catch {
+      saves = [];
+    }
+    saveGameModal(this.ui, saves, {
+      onSave: (slot) => void this.save(slot).then(resume),
+      onExport: () => {
+        const ok = downloadText(exportFileName(c.state), this.saves.exportJson(c.state));
+        c.hud.toast(ok ? 'Save file exported.' : 'This browser blocked the download — use Copy to clipboard.', ok ? 'econ' : 'warn');
+      },
+      onCopy: () => {
+        const json = this.saves.exportJson(c.state);
+        const done = (ok: boolean): void => c.hud.toast(ok ? 'Save copied — paste it into Load game → Import on any device.' : 'Clipboard unavailable in this browser.', ok ? 'econ' : 'warn');
+        if (navigator.clipboard?.writeText) navigator.clipboard.writeText(json).then(() => done(true), () => done(false));
+        else done(false);
+      },
     });
   }
 
@@ -277,7 +342,7 @@ export class App {
         {
           label: 'Save game',
           onClick: () => {
-            void this.save('manual').then(() => c.setSpeed(prev || 1));
+            void this.openSaveMenu(() => c.setSpeed(prev || 1));
           },
         },
         {
@@ -306,7 +371,7 @@ export class App {
     this.saving = true;
     try {
       await this.saves.save(c.state, slot);
-      if (!silent) c.hud.toast(slot === 'manual' ? 'Campaign saved.' : 'Autosaved.', 'econ');
+      if (!silent) c.hud.toast(slot === 'autosave' ? 'Autosaved.' : `Campaign saved to ${slotLabel(slot)}.`, 'econ');
     } catch (err) {
       console.error('Save failed', err);
       c.hud.toast('Save failed — storage unavailable.', 'warn');

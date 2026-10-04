@@ -3,7 +3,7 @@ import { advanceCampaign } from '../src/campaign/sim';
 import { worldForState } from '../src/campaign/newCampaign';
 import { makeContext } from '../src/campaign/context';
 import { MemoryStore } from '../src/persistence/kvstore';
-import { deserializeSave, SaveManager, serializeSave } from '../src/persistence/save';
+import { deserializeSave, exportFileName, SaveManager, serializeSave, slotLabel } from '../src/persistence/save';
 import { migrateState } from '../src/persistence/migrations';
 import { STATE_VERSION } from '../src/campaign/types';
 import { freshCampaign } from './helpers';
@@ -75,5 +75,35 @@ describe('persistence', () => {
     expect(loaded?.state.time).toBeLessThan(c.state.time);
     await m.clear();
     expect(await m.list()).toEqual([]);
+  });
+
+  it('keeps several manual slots and deletes one without touching the others', async () => {
+    const c = freshCampaign();
+    const m = new SaveManager(new MemoryStore());
+    await m.save(c.state, 'manual');
+    advanceCampaign(c, 3);
+    await m.save(c.state, 'slot2');
+    advanceCampaign(c, 3);
+    await m.save(c.state, 'slot3');
+    expect((await m.list()).map((s) => s.slot).sort()).toEqual(['manual', 'slot2', 'slot3']);
+    await m.delete('slot2');
+    expect((await m.list()).map((s) => s.slot).sort()).toEqual(['manual', 'slot3']);
+    expect(slotLabel('manual')).toBe('Slot 1');
+    expect(slotLabel('autosave')).toBe('Autosave');
+  });
+
+  it('exports a portable save file and imports it into the autosave slot', async () => {
+    const c = freshCampaign();
+    advanceCampaign(c, 30);
+    const a = new SaveManager(new MemoryStore());
+    const json = a.exportJson(c.state);
+    expect(exportFileName(c.state, new Date(2026, 0, 4, 18, 30))).toBe('planet-x-day2-20260104-1830.json');
+    // another device / browser
+    const b = new SaveManager(new MemoryStore());
+    const imported = await b.importJson(`  ${json}\n`);
+    expect(JSON.stringify(imported.state)).toBe(JSON.stringify(c.state));
+    const latest = await b.latest();
+    expect(latest?.slot).toBe('autosave');
+    await expect(b.importJson('{"format":"something-else"}')).rejects.toThrow(/Not a Planet X/);
   });
 });

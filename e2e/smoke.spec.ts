@@ -144,6 +144,7 @@ test('full loop: campaign → move army → tactical battle → back to campaign
   // 7. save, reload, continue
   await page.getByTestId('menu').click();
   await page.getByRole('button', { name: 'Save game' }).click();
+  await page.getByTestId('save-manual').click();
   await page.waitForTimeout(800);
   const savedTime = await px(page, (p) => p.state().time);
   await page.reload();
@@ -153,6 +154,17 @@ test('full loop: campaign → move army → tactical battle → back to campaign
   const loaded = await px(page, (p) => ({ time: p.state().time, battles: p.state().stats.battlesFought }));
   expect(loaded.battles).toBe(1);
   expect(Math.abs(loaded.time - savedTime)).toBeLessThan(2);
+
+  // 8. the save slot is listed in Load game, and a save file round-trips through import
+  const exported: string = await px(page, (p) => p.app.saves.exportJson(p.state()));
+  await page.getByTestId('menu').click();
+  await page.getByRole('button', { name: 'Main menu' }).click();
+  await page.getByTestId('load-game').click();
+  await expect(page.getByTestId('load-manual')).toBeVisible();
+  await page.locator('.save-paste').fill(exported);
+  await page.getByRole('button', { name: 'Import text' }).click();
+  await expect(page.getByTestId('menu')).toBeVisible();
+  expect(await px(page, (p) => p.state().stats.battlesFought)).toBe(1);
 
   await page.screenshot({ path: `test-results/smoke-${info.project.name}.png` });
   expect(errors, errors.join('\n')).toEqual([]);
