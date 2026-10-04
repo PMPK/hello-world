@@ -562,6 +562,17 @@ body {
   min-height: 0;
 }
 
+/* ---------- help ---------- */
+.help-list {
+  margin: 4px 0 10px;
+  padding-left: 18px;
+  line-height: 1.45;
+  font-size: 13px;
+}
+.help-list li {
+  margin: 3px 0;
+}
+
 /* ---------- convoy dialog ---------- */
 .convoy-dest {
   flex-wrap: wrap;
@@ -1328,6 +1339,9 @@ body {
     min-width: 0;
   }
   .clock .cal {
+    display: none;
+  }
+  .bclock .day {
     display: none;
   }
   .status-chip {

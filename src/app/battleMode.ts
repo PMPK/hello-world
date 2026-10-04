@@ -9,7 +9,9 @@ import { Keyboard, PointerInput, type PointerInfo } from '../input/pointer';
 import { BattleHud, type BattleController } from '../ui/battleHud';
 import { el } from '../ui/dom';
 import { openModal } from '../ui/screens';
+import { battleTipsCard } from '../ui/help';
 import type { App, Mode } from './app';
+import { isTouchDevice } from './settings';
 
 /** Tactical battle mode. The campaign is frozen while this runs. */
 export class BattleMode implements Mode, BattleController {
@@ -87,6 +89,17 @@ export class BattleMode implements Mode, BattleController {
     this.keysOff = app.keyboard.onKey((e) => this.onKey(e));
     // start with our whole force selected: the common first action is to move it
     this.selectAll();
+    // the first battle the player commands opens with the controls, paused
+    if (!app.settings.battleTipsSeen) {
+      this.showHelp();
+      app.applySettings({ ...app.settings, battleTipsSeen: true });
+    }
+  }
+
+  showHelp(): void {
+    const resume = this.speed || 1;
+    this.setSpeed(0);
+    battleTipsCard(this.app.ui, isTouchDevice(), () => this.setSpeed(resume));
   }
 
   // ---------------------------------------------------------------------------

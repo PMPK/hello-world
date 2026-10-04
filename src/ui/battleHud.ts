@@ -26,6 +26,8 @@ export interface BattleController {
   withdraw(): void;
   secure(): void;
   focusSelection(): void;
+  /** Pause and show the battle tips. */
+  showHelp(): void;
   jumpCamera(x: number, z: number): void;
   viewFootprint(): { x: number; z: number }[] | null;
 }
@@ -136,7 +138,9 @@ export class BattleHud {
   private buildTop(): HTMLElement {
     const top = el('div', 'topbar');
     const menuBtn = iconBtn(ICONS.focus, 'Center on selection', () => this.c.focusSelection(), 'panel');
-    const clock = el('div', 'panel clock');
+    const helpBtn = iconBtn(ICONS.help, 'Battle help', () => this.c.showHelp(), 'panel');
+    helpBtn.dataset.testid = 'battle-help';
+    const clock = el('div', 'panel clock bclock');
     this.clockEl = el('div', 'date');
     const loc = el('div', { class: 'day', text: this.c.sim.setup.locationName });
     clock.append(this.clockEl, loc);
@@ -163,7 +167,7 @@ export class BattleHud {
       ),
     'panel danger');
     this.withdrawBtn.dataset.testid = 'withdraw';
-    top.append(menuBtn, clock, seg, this.forces, this.endBtn, this.withdrawBtn);
+    top.append(menuBtn, helpBtn, clock, seg, this.forces, this.endBtn, this.withdrawBtn);
     return top;
   }
 

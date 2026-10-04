@@ -21,7 +21,8 @@ import { AudioEngine } from '../audio/audio';
 import { difficultyOf } from '../data/difficulty';
 import { BattleMode } from './battleMode';
 import { CampaignMode } from './campaignMode';
-import { loadSettings, saveSettings, type Settings } from './settings';
+import { isTouchDevice, loadSettings, saveSettings, type Settings } from './settings';
+import { howToPlayModal } from '../ui/help';
 
 export interface Mode {
   update(dt: number): void;
@@ -386,6 +387,7 @@ export class App {
             void this.openSaveMenu(() => c.setSpeed(prev || 1));
           },
         },
+        { label: 'How to play', onClick: () => howToPlayModal(this.ui, isTouchDevice()) },
         {
           label: 'Settings',
           onClick: () =>

@@ -72,6 +72,9 @@
   acknowledgements, radio chirps for reports, contact alarm, wind ambience; Sound Off/Low/Medium/High in
   settings, M to mute.
 - **Auto-resolve** runs in time slices with a progress dialog (no main-thread freeze on phones).
+- **In-game help**: the first commanded battle opens paused with a controls card (touch or mouse
+  wording); the ? button on the battle bar brings it back; Command menu → How to play has the full
+  manual (campaign + battle).
 - **Crash guard**: a single failing frame is skipped; 30 in a row stop the game with a "The simulation
   stopped" dialog (error text, Reload / Main menu) instead of a silent freeze. Saves are untouched.
 - **Tests**: 92 Vitest unit tests; Playwright smoke tests on phone-landscape touch and desktop mouse profiles

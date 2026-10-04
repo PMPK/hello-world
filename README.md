@@ -32,6 +32,7 @@ STRATEGIC MAP ──► economy / construction / production / army movement (rea
 | Camera | 1-finger drag pan · pinch zoom · 2-finger twist rotate | drag pan · wheel zoom · right/middle-drag rotate · WASD/arrows · Q/E rotate · R/F zoom |
 | Select | tap | left-click (battle: drag a box) |
 | Move / attack | with a force selected, tap ground / tap enemy · long-press = attack-move (battle) | right-click ground / enemy |
+| Help | Command menu → How to play · ? on the battle bar (shown automatically at the first battle) | same |
 | Garrison (battle) | infantry selected → tap one of your buildings · nothing selected → tap it to select its garrison | same with clicks |
 | Campaign time | ⏸ 1× 2× 4× buttons | Space pause · 1/2/4 speed |
 | Battle | ALL · TYPE · BOX · ATK-MOVE · HOLD · STOP · FALL BACK buttons, minimap tap | Ctrl+A all · A attack-move · H hold · S stop · X fall back · C centre · Esc deselect |

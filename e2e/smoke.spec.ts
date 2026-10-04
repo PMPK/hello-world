@@ -15,6 +15,13 @@ async function tap(page: Page, x: number, y: number, touch: boolean): Promise<vo
   else await page.mouse.click(x, y);
 }
 
+/** The first commanded battle opens paused with the controls card; close it. */
+async function dismissBattleTips(page: Page): Promise<void> {
+  await expect(page.getByTestId('battle-tips')).toBeVisible();
+  await page.getByRole('button', { name: 'Got it — start' }).click();
+  await expect(page.getByTestId('battle-tips')).toBeHidden();
+}
+
 /** Issue a command: tap on touch screens, right-click with a mouse. */
 async function command(page: Page, x: number, y: number, touch: boolean): Promise<void> {
   if (touch) await page.touchscreen.tap(x, y);
@@ -104,6 +111,8 @@ test('full loop: campaign → move army → tactical battle → back to campaign
   await expect(page.getByTestId('command-battle')).toBeVisible();
   await page.getByTestId('command-battle').click();
   await expect(page.getByTestId('withdraw')).toBeVisible();
+  await dismissBattleTips(page);
+  expect(await px(page, (p) => p.app.battle.speed)).toBe(1);
   expect(await px(page, (p) => p.battle() !== null)).toBe(true);
   const timeAtBattleStart = await px(page, (p) => p.state().time);
 
@@ -191,6 +200,7 @@ test('base assault battle contains the base buildings', async ({ page }, info) =
   expect(await px(page, (p) => p.debugContact('base_assault'))).toBe(true);
   await page.getByTestId('command-battle').click();
   await expect(page.getByTestId('withdraw')).toBeVisible();
+  await dismissBattleTips(page);
   const armed: number = await px(page, (p) => p.battle().buildings.filter((b: any) => b.defense && b.defense.crew > 0 && b.defense.ammo > 0).length);
   expect(armed).toBe(2);
   const battleBuildings: string[] = await px(page, (p) =>

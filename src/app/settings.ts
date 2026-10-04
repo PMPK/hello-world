@@ -14,6 +14,8 @@ export interface Settings {
   muted: boolean;
   /** Difficulty used for the next new campaign. */
   difficulty: Difficulty;
+  /** Saw the battle tips card (shown at the first commanded battle). */
+  battleTipsSeen: boolean;
 }
 
 const KEY = 'planet-x:settings';
@@ -32,6 +34,7 @@ export function defaultSettings(): Settings {
     soundVolume: 0.7,
     muted: false,
     difficulty: 'normal',
+    battleTipsSeen: false,
   };
 }
 
