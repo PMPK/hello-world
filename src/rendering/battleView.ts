@@ -13,6 +13,7 @@ import { Effects } from './effects';
 import { Materials } from './models/builder';
 import { Models } from './models/cache';
 import { buildRing, TANK_TURRET_HEIGHT } from './models/units';
+import { Daylight } from './daylight';
 import { makeLights, type GameRenderer } from './renderer';
 
 /** Visual exaggeration of units on the battlefield for readability. */
@@ -44,6 +45,7 @@ export class BattleView {
   readonly effects: Effects;
   private readonly t: BattleTerrain;
   private sun!: THREE.DirectionalLight;
+  private daylight!: Daylight;
   private sides: [SideMeshes, SideMeshes];
   private buildingObjs = new Map<number, { obj: THREE.Object3D; key: string }>();
   private turretObjs = new Map<number, THREE.Mesh>();
@@ -83,7 +85,9 @@ export class BattleView {
     const bg = new THREE.Color(0xa4b5bc);
     this.scene.background = bg;
     this.scene.fog = new THREE.Fog(bg, 400, 1400);
-    this.sun = makeLights(this.scene, gr.profile, 500).sun;
+    const lights = makeLights(this.scene, gr.profile, 500);
+    this.sun = lights.sun;
+    this.daylight = new Daylight({ sun: lights.sun, hemi: lights.hemi, scene: this.scene });
     this.buildTerrain();
     this.buildVegetation();
     this.effects = new Effects(gr.profile.effects);
@@ -498,8 +502,14 @@ export class BattleView {
       cam.far = 2000;
       cam.updateProjectionMatrix();
     }
-    this.sun.position.set(tgt.x - 300, tgt.y + 520, tgt.z + 220);
+    const L = this.daylight.toLight;
+    this.sun.position.set(tgt.x + L.x * 620, tgt.y + L.y * 620, tgt.z + L.z * 620);
     this.sun.target.position.copy(tgt);
+  }
+
+  /** Time-of-day lighting (local hour 0..24). */
+  setHour(hour: number): void {
+    this.daylight.set(hour);
   }
 
   render(): void {

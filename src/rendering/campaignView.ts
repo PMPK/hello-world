@@ -12,6 +12,7 @@ import { CameraRig } from '../input/cameraRig';
 import { Materials } from './models/builder';
 import { Models } from './models/cache';
 import { buildRing, TANK_TURRET_HEIGHT } from './models/units';
+import { Daylight } from './daylight';
 import { makeLights, type GameRenderer } from './renderer';
 
 /** Model scales on the strategic map (models are authored in metres). */
@@ -68,6 +69,7 @@ export class CampaignView {
   readonly rig: CameraRig;
   private readonly terrain: Terrain;
   private sun!: THREE.DirectionalLight;
+  private daylight!: Daylight;
   private terrainMesh!: THREE.Mesh;
   private water!: THREE.Mesh;
   private buildingObjs = new Map<string, { obj: THREE.Object3D; key: string }>();
@@ -116,7 +118,9 @@ export class CampaignView {
     const bg = new THREE.Color(0x9db2bd);
     this.scene.background = bg;
     this.scene.fog = new THREE.Fog(bg, 120, 600);
-    this.sun = makeLights(this.scene, gr.profile, 200).sun;
+    const lights = makeLights(this.scene, gr.profile, 200);
+    this.sun = lights.sun;
+    this.daylight = new Daylight({ sun: lights.sun, hemi: lights.hemi, scene: this.scene });
     this.buildTerrain();
     this.buildWater();
     this.buildVegetation(world, state);
@@ -713,8 +717,14 @@ export class CampaignView {
       cam.far = 600;
       cam.updateProjectionMatrix();
     }
-    this.sun.position.set(t.x - 120, t.y + 200, t.z + 90);
+    const L = this.daylight.toLight;
+    this.sun.position.set(t.x + L.x * 240, t.y + L.y * 240, t.z + L.z * 240);
     this.sun.target.position.copy(t);
+  }
+
+  /** Time-of-day lighting (local hour 0..24). */
+  setHour(hour: number): void {
+    this.daylight.set(hour);
   }
 
   render(): void {

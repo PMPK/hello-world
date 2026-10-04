@@ -100,6 +100,8 @@ export interface SensorDef extends ComponentBase {
   visionBonus: number;
   /** Ability to see through concealment (0..1). */
   spotting: number;
+  /** 0..1: how much of the vision range is kept at night (thermal = 1). */
+  nightVision?: number;
 }
 
 export interface ElectronicsDef extends ComponentBase {
@@ -410,6 +412,7 @@ export const SENSORS: Record<string, SensorDef> = {
     name: 'Recon Optics Mast',
     visionBonus: 70,
     spotting: 0.5,
+    nightVision: 0.5,
     mass: 0.1,
     cost: { components: 2 },
     buildHours: 1,
@@ -420,6 +423,7 @@ export const SENSORS: Record<string, SensorDef> = {
     name: 'Gunner Thermal Sight',
     visionBonus: 50,
     spotting: 0.2,
+    nightVision: 1,
     mass: 0.2,
     cost: { components: 3 },
     buildHours: 2,

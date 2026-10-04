@@ -1,4 +1,5 @@
 import { dist } from '../core/math';
+import { hourOfDay } from '../core/time';
 import { BUILDINGS } from '../data/buildings';
 import { defenseStatsOf } from '../units/defense';
 import { FACTION_DEFS } from '../data/factions';
@@ -172,5 +173,6 @@ export function createBattleSetup(state: CampaignState, world: World, p: Pending
     playerSide,
     timeLimit: BATTLE_TIME_LIMIT,
     locationName: locationName(state, world, cx, cz),
+    startHour: hourOfDay(state.time),
   };
 }

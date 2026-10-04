@@ -98,6 +98,7 @@ export class BattleMode implements Mode, BattleController {
     this.app.audio.setListener(rig.target.x, rig.target.z, Math.cos(rig.yaw), -Math.sin(rig.yaw), 280 + rig.dist * 1.6);
     const simDt = this.sim.finished ? 0 : dt * this.speed;
     if (simDt > 0) this.sim.step(simDt);
+    this.view.setHour(this.sim.hourNow());
     this.view.sync(this.sim.finished ? dt * 0.5 : simDt);
     this.view.update(dt);
     // drop dead units from selection

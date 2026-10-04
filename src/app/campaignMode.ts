@@ -1,4 +1,4 @@
-import { CAMPAIGN_HOURS_PER_SECOND, type SpeedSetting } from '../core/time';
+import { CAMPAIGN_HOURS_PER_SECOND, hourOfDay, type SpeedSetting } from '../core/time';
 import { dist } from '../core/math';
 import { BUILDINGS, type BuildingTypeId } from '../data/buildings';
 import { FACTION_DEFS } from '../data/factions';
@@ -126,6 +126,7 @@ export class CampaignMode implements Mode, CampaignController {
       }
       if (steps >= 60) this.acc = 0;
     }
+    this.view.setHour(hourOfDay(this.state.time));
     this.view.sync(this.state, dt);
     this.view.update(dt);
     if (this.placing) this.updateGhost();

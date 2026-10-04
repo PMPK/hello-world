@@ -72,6 +72,11 @@ Replacing them with nations later is a data change.
 - During a tactical battle the strategic simulation is **completely frozen**. Afterwards the campaign
   clock is advanced by the battle duration × `BATTLE_TIME_SCALE` (12: one battle second represents 12 s
   of campaign time — battles are time-compressed). The world then catches up normally.
+- **Day and night** follow the campaign clock (the expedition lands at 06:00): sun path, sky, fog and
+  ambient light are keyframed by hour (moonlit nights stay readable on phones). Battles inherit the
+  hour at contact and advance it with the compressed battle clock. At night vision shrinks by up to
+  45% — thermal sights (tanks) ignore it, recon optics halve it, infantry suffer it fully; base
+  sentries and defence optics are partly affected.
 
 ### 4.3 Economy (X4-flavoured, kept small)
 

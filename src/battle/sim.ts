@@ -1,5 +1,6 @@
 import { angleDiff, approachAngle, clamp, dist } from '../core/math';
 import { mixSeed, Rng } from '../core/rng';
+import { darkness } from '../core/time';
 import { BUILDINGS } from '../data/buildings';
 import type { WeaponDef } from '../data/components';
 import { defenseStatsOf } from '../units/defense';
@@ -1276,7 +1277,18 @@ export class BattleSim {
   // Visibility
   // ---------------------------------------------------------------------------
 
+  /** Local hour of day now (the battle clock is time-compressed like the campaign result). */
+  hourNow(): number {
+    return ((this.setup.startHour ?? 12) + (this.time * BATTLE_TIME_SCALE) / 3600) % 24;
+  }
+
+  /** Vision multiplier at the current darkness for an observer with the given night-vision rating. */
+  private nightSight(dark: number, nightVision: number): number {
+    return 1 - dark * 0.45 * (1 - nightVision);
+  }
+
   updateVisibility(): void {
+    const dark = darkness(this.hourNow());
     for (const side of [0, 1] as SideIndex[]) {
       const eyes = this.units.filter((u) => u.side === side && isActive(u));
       const posts = this.buildings.filter((b) => b.side === side && !b.destroyed);
@@ -1299,7 +1311,7 @@ export class BattleSim {
         let seen = false;
         for (const f of eyes) {
           const spotBoost = 1 + f.stats.spotting * (1 - conceal);
-          const r = f.stats.vision * conceal * spotBoost;
+          const r = f.stats.vision * conceal * spotBoost * this.nightSight(dark, f.stats.nightVision);
           const dx = e.x - f.x;
           const dz = e.z - f.z;
           if (dx * dx + dz * dz > r * r) continue;
@@ -1310,13 +1322,13 @@ export class BattleSim {
         if (!seen) {
           for (const b of posts) {
             const d = dist(b.x, b.z, e.x, e.z);
-            if (d <= 150 * conceal) {
+            if (d <= 150 * conceal * this.nightSight(dark, 0.4)) {
               seen = true;
               break;
             }
             // manned defences keep a lookout with optics
             const def = b.defense;
-            if (def && def.crew > 0 && d <= def.vision * conceal && bLineOfSight(this.terrain, b.x, b.z, def.eyeHeight + 1, e.x, e.z, eyeHeight(e))) {
+            if (def && def.crew > 0 && d <= def.vision * conceal * this.nightSight(dark, 0.5) && bLineOfSight(this.terrain, b.x, b.z, def.eyeHeight + 1, e.x, e.z, eyeHeight(e))) {
               seen = true;
               break;
             }

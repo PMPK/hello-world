@@ -10,7 +10,8 @@
   resource sites, roads, bases with real building models, army tokens with banners, convoy trucks,
   perimeter rings, NATO-style symbols and labels, strategic fog of war, pan/zoom/rotate (touch + mouse + keys).
 - **Time**: real-time with pause, 1×/2×/4×; fixed-step deterministic simulation; frozen during battles;
-  clock advanced by battle duration afterwards.
+  clock advanced by battle duration afterwards. **Day/night** lighting from the clock on the map and in
+  battles; night shortens sight except for thermal (tanks) and recon optics.
 - **Economy**: workforce allocation, power grid with fuel-burning plants, storage caps, recipes with
   Auto/fixed modes and stock targets, extractor outposts with buffers and convoys, food and population
   growth, Earth supply shuttles, garrison resupply/replacements/field repairs, building repair/rebuild.
@@ -47,7 +48,7 @@
   acknowledgements, radio chirps for reports, contact alarm, wind ambience; Sound Off/Low/Medium/High in
   settings, M to mute.
 - **Auto-resolve** runs in time slices with a progress dialog (no main-thread freeze on phones).
-- **Tests**: 47 Vitest unit tests; Playwright smoke tests on phone-landscape touch and desktop mouse profiles
+- **Tests**: 51 Vitest unit tests; Playwright smoke tests on phone-landscape touch and desktop mouse profiles
   (full loop incl. unit card, save/continue; fortified base assault).
 - **Deployment**: GitHub Actions CI + Pages deploy workflow (gh-pages branch). A single-file build is also
   published as a claude.ai Artifact (https://claude.ai/artifact/7qGUMq5vWjnaNKRHEyempW).

@@ -48,6 +48,7 @@ class MenuMode implements Mode {
   update(dt: number): void {
     this.t += dt;
     this.view.rig.rotateBy(dt * 0.05);
+    this.view.setHour(17.2); // golden hour for the title screen
     this.view.sync(this.state, dt);
     this.view.update(dt);
     this.app.overlay.clear();

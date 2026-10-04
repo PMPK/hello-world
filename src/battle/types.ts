@@ -79,6 +79,8 @@ export interface BattleSetup {
   timeLimit: number;
   /** Campaign map region name for UI. */
   locationName: string;
+  /** Local hour of day when the battle starts (lighting and night vision); 12 if absent. */
+  startHour?: number;
 }
 
 export type TargetRef = { kind: 'unit'; id: number } | { kind: 'building'; id: number };

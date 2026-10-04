@@ -31,6 +31,8 @@ export interface UnitStats {
   strategicSpeed: number;
   vision: number;
   spotting: number;
+  /** 0..1: share of the night-time vision penalty that sensors cancel (thermal = 1). */
+  nightVision: number;
   stealth: number;
   accuracyBonus: number;
   weapons: WeaponDef[];
@@ -93,6 +95,7 @@ export function computeStats(design: UnitDesign): UnitStats {
 
   const vision = ch.baseVision + sensors.reduce((a, s) => a + s.visionBonus, 0);
   const spotting = Math.min(1, sensors.reduce((a, s) => Math.max(a, s.spotting), 0));
+  const nightVision = Math.min(1, sensors.reduce((a, s) => Math.max(a, s.nightVision ?? 0), 0));
   const accuracyBonus = elec.reduce((a, e) => a + e.accuracyBonus, 0);
 
   // Combat power heuristic (AI estimates): sqrt(damage output x survivability).
@@ -117,6 +120,7 @@ export function computeStats(design: UnitDesign): UnitStats {
     strategicSpeed,
     vision,
     spotting,
+    nightVision,
     stealth: ch.stealth,
     accuracyBonus,
     weapons,

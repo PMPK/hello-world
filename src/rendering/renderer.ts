@@ -67,7 +67,7 @@ export class GameRenderer {
 }
 
 /** Standard sun + sky lighting rig. */
-export function makeLights(scene: THREE.Scene, profile: QualityProfile, span: number): { sun: THREE.DirectionalLight } {
+export function makeLights(scene: THREE.Scene, profile: QualityProfile, span: number): { sun: THREE.DirectionalLight; hemi: THREE.HemisphereLight } {
   const hemi = new THREE.HemisphereLight(0xc4d6e4, 0x4a4535, 1.35);
   scene.add(hemi);
   const sun = new THREE.DirectionalLight(0xfff1dc, 2.1);
@@ -80,5 +80,5 @@ export function makeLights(scene: THREE.Scene, profile: QualityProfile, span: nu
   }
   scene.add(sun);
   scene.add(sun.target);
-  return { sun };
+  return { sun, hemi };
 }

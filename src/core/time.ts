@@ -26,6 +26,26 @@ export function formatCampaignDate(hours: number): string {
   return `${pad2(d.getUTCDate())} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
 }
 
+/** Local hour of day (0..24) at campaign time `hours`. */
+export function hourOfDay(hours: number): number {
+  const start = new Date(CAMPAIGN_START_UTC);
+  const h = (start.getUTCHours() + start.getUTCMinutes() / 60 + hours) % 24;
+  return h < 0 ? h + 24 : h;
+}
+
+/**
+ * Darkness 0 (full day) .. 1 (deep night) for an hour of day: dawn 05:00-07:00,
+ * dusk 18:00-20:00. Used by rendering (lighting) and by battles (night vision).
+ */
+export function darkness(hour: number): number {
+  const h = ((hour % 24) + 24) % 24;
+  const smooth = (t: number): number => t * t * (3 - 2 * t);
+  if (h < 5 || h >= 20) return 1;
+  if (h < 7) return 1 - smooth((h - 5) / 2);
+  if (h < 18) return 0;
+  return smooth((h - 18) / 2);
+}
+
 /** Day number of the expedition (day 1 = first day). */
 export function campaignDay(hours: number): number {
   return Math.floor(hours / 24) + 1;
