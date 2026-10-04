@@ -25,6 +25,8 @@ export type Selection =
 /** What the HUD needs from the campaign mode. */
 export interface CampaignController {
   readonly state: CampaignState;
+  /** Interface sound cue (no-op without audio). */
+  sound(kind: 'radio' | 'alert' | 'confirm'): void;
   readonly selection: Selection;
   readonly speed: SpeedSetting;
   readonly placing: { typeId: BuildingTypeId; valid: boolean; reason: string } | null;
@@ -330,11 +332,14 @@ export class CampaignHud {
   private updateToasts(): void {
     const log = this.c.state.log;
     if (this.seenLog > log.length) this.seenLog = 0;
+    let fresh = false;
     for (let i = this.seenLog; i < log.length; i++) {
       const e = log[i];
       if (e.factionId && e.factionId !== this.c.state.playerFactionId) continue;
       this.toasts.push(e.text, e.kind);
+      fresh = true;
     }
+    if (fresh && this.seenLog > 0) this.c.sound('radio');
     this.seenLog = log.length;
   }
 
@@ -385,6 +390,7 @@ export class CampaignHud {
     }
     if (this.contactFor === p.id) return;
     this.contactFor = p.id;
+    this.c.sound('alert');
     this.contactClose = this.showContact(p);
   }
 

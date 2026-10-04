@@ -59,6 +59,8 @@ src/rendering/
   effects.ts                pooled tracers (1 draw call) and flashes/explosions/smoke (1 instanced draw call)
   overlay.ts                2D canvas overlay: NATO-style symbols, labels, bars, selection box
   models/                   ModelBuilder (low-poly primitives → one geometry with vertex colours), unit/building models, cache
+src/audio/audio.ts          procedural WebAudio (shared noise buffer + oscillators): spatial gunfire/explosions,
+                            UI cues, wind ambience; lazy context on first gesture, voice/frame budgets
 src/input/                  PointerInput (tap/double-tap/long-press/drag/pinch/wheel), Keyboard, CameraRig (RTS orbit camera)
 src/ui/                     DOM HUDs (campaign, battle), minimap, screens (menu, intro, settings, modals, toasts), styles.css
 ```

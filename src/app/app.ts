@@ -16,6 +16,7 @@ import { CampaignView } from '../rendering/campaignView';
 import { Keyboard } from '../input/pointer';
 import { el } from '../ui/dom';
 import { confirmModal, introScreen, mainMenu, openModal, rotateOverlay, settingsModal } from '../ui/screens';
+import { AudioEngine } from '../audio/audio';
 import { BattleMode } from './battleMode';
 import { CampaignMode } from './campaignMode';
 import { loadSettings, saveSettings, type Settings } from './settings';
@@ -72,6 +73,7 @@ export class App {
   readonly overlay: Overlay;
   readonly ui: HTMLElement;
   readonly keyboard = new Keyboard();
+  readonly audio = new AudioEngine();
   settings: Settings;
   saves!: SaveManager;
   private mode: Mode | null = null;
@@ -99,6 +101,24 @@ export class App {
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'hidden' && this.campaign && !this.battle) void this.save('autosave', true);
     });
+    // audio may only start from a user gesture; keep resuming (mobile browsers suspend it)
+    const unlock = (): void => this.audio.unlock();
+    window.addEventListener('pointerdown', unlock, { capture: true });
+    window.addEventListener('keydown', unlock, { capture: true });
+    this.audio.setVolume(this.settings.soundVolume, this.settings.muted);
+    this.ui.addEventListener(
+      'click',
+      (e) => {
+        if ((e.target as HTMLElement | null)?.closest?.('button')) this.audio.ui('click');
+      },
+      { capture: true },
+    );
+    this.keyboard.onKey((e) => {
+      if (e.code === 'KeyM' && !e.ctrlKey && !e.metaKey) {
+        this.settings.muted = !this.settings.muted;
+        this.applySettings(this.settings);
+      }
+    });
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
       this.installPrompt = e as InstallPromptEvent;
@@ -117,6 +137,7 @@ export class App {
   private frame = (now: number): void => {
     const dt = Math.min(0.1, Math.max(0, (now - this.last) / 1000));
     this.last = now;
+    this.audio.beginFrame();
     try {
       this.mode?.update(dt);
       this.mode?.render();
@@ -142,6 +163,7 @@ export class App {
 
   private setMode(m: Mode | null): void {
     this.mode = m;
+    this.audio.setAmbience(m instanceof BattleMode ? 'battle' : m ? 'campaign' : 'none');
     this.onResize();
   }
 
@@ -234,6 +256,7 @@ export class App {
     this.settings = s;
     saveSettings(s);
     this.gr.applyQuality(s.quality);
+    this.audio.setVolume(s.soundVolume, s.muted);
     this.fpsEl.style.display = s.showFps ? '' : 'none';
     this.onResize();
   }

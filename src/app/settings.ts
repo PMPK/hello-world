@@ -7,6 +7,9 @@ export interface Settings {
   /** Seen the intro at least once. */
   introSeen: boolean;
   edgeScroll: boolean;
+  /** Master volume 0..1. */
+  soundVolume: number;
+  muted: boolean;
 }
 
 const KEY = 'planet-x:settings';
@@ -22,6 +25,8 @@ export function defaultSettings(): Settings {
     autosaveMinutes: 2,
     introSeen: false,
     edgeScroll: false,
+    soundVolume: 0.7,
+    muted: false,
   };
 }
 
@@ -35,6 +40,8 @@ export function loadSettings(): Settings {
       ...d,
       ...s,
       quality: s.quality === 'low' || s.quality === 'medium' || s.quality === 'high' ? s.quality : d.quality,
+      soundVolume: typeof s.soundVolume === 'number' && Number.isFinite(s.soundVolume) ? Math.max(0, Math.min(1, s.soundVolume)) : d.soundVolume,
+      muted: typeof s.muted === 'boolean' ? s.muted : d.muted,
     };
   } catch {
     return d;

@@ -40,7 +40,7 @@ export class BattleMode implements Mode, BattleController {
     this.playerSide = setup.playerSide ?? 1;
     const ai: SideIndex[] = [0, 1].filter((s) => s !== setup.playerSide) as SideIndex[];
     this.sim = new BattleSim(setup, strategic, { aiSides: ai });
-    this.view = new BattleView(app.gr, this.sim, this.playerSide);
+    this.view = new BattleView(app.gr, this.sim, this.playerSide, app.audio);
     this.hud = new BattleHud(app.ui, this);
     this.input = new PointerInput(app.canvas, {
       onTap: (x, y, i) => this.onTap(x, y, i, false),
@@ -93,6 +93,9 @@ export class BattleMode implements Mode, BattleController {
 
   update(dt: number): void {
     this.keyboardCamera(dt, this.app.keyboard);
+    // the ear sits at the camera's focus point; panning follows the camera's screen-right
+    const rig = this.view.rig;
+    this.app.audio.setListener(rig.target.x, rig.target.z, Math.cos(rig.yaw), -Math.sin(rig.yaw), 280 + rig.dist * 1.6);
     const simDt = this.sim.finished ? 0 : dt * this.speed;
     if (simDt > 0) this.sim.step(simDt);
     this.view.sync(this.sim.finished ? dt * 0.5 : simDt);
@@ -341,6 +344,7 @@ export class BattleMode implements Mode, BattleController {
       if (!this.mine(u) && this.selected.size) {
         this.sim.orderAttack([...this.selected], { kind: 'unit', id: u.id });
         this.orderMarks.push({ x: u.x, z: u.z, t: this.sim.time, attack: true });
+        this.app.audio.ui('confirm');
         return;
       }
       return;
@@ -350,6 +354,7 @@ export class BattleMode implements Mode, BattleController {
       if (b.side !== this.playerSide && this.selected.size) {
         this.sim.orderAttack([...this.selected], { kind: 'building', id: b.id });
         this.orderMarks.push({ x: b.x, z: b.z, t: this.sim.time, attack: true });
+        this.app.audio.ui('confirm');
         return;
       }
       if (this.selected.size) {
@@ -377,6 +382,7 @@ export class BattleMode implements Mode, BattleController {
   private issueMove(x: number, z: number, attackMove: boolean): void {
     this.sim.orderMove([...this.selected], x, z, attackMove);
     this.orderMarks.push({ x, z, t: this.sim.time, attack: attackMove });
+    this.app.audio.ui('confirm');
     if (this.attackMoveMode) {
       this.attackMoveMode = false;
       this.hud.update();

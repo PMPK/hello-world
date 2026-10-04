@@ -97,6 +97,10 @@ export class CampaignMode implements Mode, CampaignController {
     this.hud.root.style.display = 'none';
   }
 
+  sound(kind: 'radio' | 'alert' | 'confirm'): void {
+    this.app.audio.ui(kind);
+  }
+
   resume(): void {
     this.suspended = false;
     this.input.enabled = true;
@@ -369,6 +373,7 @@ export class CampaignMode implements Mode, CampaignController {
 
   private move(armyId: string, x: number, z: number): void {
     if (!orderMove(this.ctx, armyId, x, z)) this.hud.toast('No route to that location.', 'warn');
+    else this.sound('confirm');
     syncRng(this.ctx);
     this.hud.update(true);
   }

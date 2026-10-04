@@ -43,6 +43,9 @@
   manual save, continue, reset.
 - **PWA**: manifest (fullscreen, landscape), generated icons, Workbox precache (offline), install prompt button.
 - **Quality settings**: low / medium / high (pixel ratio, shadows, tree density); FPS counter option.
+- **Audio**: procedural WebAudio — positional gunfire per weapon class, cannon/explosion booms, order
+  acknowledgements, radio chirps for reports, contact alarm, wind ambience; Sound Off/Low/Medium/High in
+  settings, M to mute.
 - **Auto-resolve** runs in time slices with a progress dialog (no main-thread freeze on phones).
 - **Tests**: 47 Vitest unit tests; Playwright smoke tests on phone-landscape touch and desktop mouse profiles
   (full loop incl. unit card, save/continue; fortified base assault).
@@ -68,7 +71,7 @@
 - Only one pending battle at a time; simultaneous contacts are resolved sequentially.
 - The campaign continues after a faction is broken (sandbox) but there is no "recover expedition" flow
   for a player who lost every base and army other than starting a new campaign.
-- No audio.
+- Audio is procedural and minimal (no music, no voice lines); browsers start it only after the first tap/key.
 - AI difficulty is not configurable yet.
 - Defences only fight inside the 800 m battlefield around the contact point; positions have no firing arcs
   (they traverse freely) and silenced positions are re-crewed by the economy after the battle.
@@ -91,5 +94,5 @@
 4. AI scouting and strategic fog of war for the AI; difficulty setting.
 5. Founding new bases from outposts; transferring population.
 6. Battle simulation in a Web Worker; spatial hash for targeting.
-7. Audio (radio chatter, gunfire, ambience).
+7. Audio polish: music stems, distant battle rumble on the campaign map, per-faction radio voices.
 8. Tutorial scenario using the directive system in `CampaignHud.updateDirective`.

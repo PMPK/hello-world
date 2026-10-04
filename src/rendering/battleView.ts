@@ -3,6 +3,7 @@ import { clamp, dist } from '../core/math';
 import { mixSeed, Rng } from '../core/rng';
 import { BUILDINGS } from '../data/buildings';
 import { FACTION_DEFS } from '../data/factions';
+import type { WeaponClass } from '../data/components';
 import { BIOME } from '../world/terrain';
 import type { BattleSim } from '../battle/sim';
 import { bHeight, type BattleTerrain } from '../battle/terrain';
@@ -26,6 +27,12 @@ interface SideMeshes {
   hulls: THREE.InstancedMesh;
   turrets: THREE.InstancedMesh;
   trucks: THREE.InstancedMesh;
+}
+
+/** Optional sound sink for battle events (implemented by the audio engine). */
+export interface BattleSound {
+  shot(kind: WeaponClass, x: number, y: number, z: number): void;
+  explosion(x: number, y: number, z: number, size: number, delay?: number): void;
 }
 
 export type BattlePick = { kind: 'unit'; id: number } | { kind: 'building'; id: number } | { kind: 'ground'; x: number; z: number };
@@ -57,6 +64,7 @@ export class BattleView {
     private readonly gr: GameRenderer,
     private readonly sim: BattleSim,
     playerSide: SideIndex | null,
+    private readonly sound: BattleSound | null = null,
   ) {
     this.playerSide = playerSide ?? 1;
     this.t = sim.terrain;
@@ -327,6 +335,8 @@ export class BattleView {
     const sim = this.sim;
     for (const ev of sim.takeEvents()) {
       if (ev.type === 'shot') {
+        // gunfire is heard even when the shooter cannot be seen
+        this.sound?.shot(ev.weapon, ev.fromX, ev.fromY, ev.fromZ);
         const shooter = sim.unitById(ev.shooter);
         // hide muzzle flashes of unseen enemies but show incoming tracers' end
         if (shooter && !this.visibleToPlayer(shooter)) {
@@ -340,6 +350,7 @@ export class BattleView {
         }
       } else if (ev.type === 'explosion') {
         this.effects.explosion(ev.x, ev.y, ev.z, ev.size, ev.delay);
+        this.sound?.explosion(ev.x, ev.y, ev.z, ev.size, ev.delay);
       } else if (ev.type === 'building_destroyed') {
         this.syncBuildings();
       }
