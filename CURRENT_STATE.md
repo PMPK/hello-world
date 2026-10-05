@@ -1,7 +1,9 @@
 # CURRENT STATE
 
-*Last updated: post-MVP iteration 2 (research, garrisons, relief landings, convoys and supply runs, AI patrols,
-living bases, in-game help, ambient music, strategic intel). Schema v10; 117 unit + 18 e2e tests green.*
+*Last updated: post-MVP iteration 3 (handoff to Codex). Since iteration 2: strategic intel and the rival's use of
+it, standing logistics orders (repeating convoys, automatic supply runs), occupying rival buildings in battle,
+a directive Show button, music moods, and two bug hunts (simulation, battles, UI). `main` carries everything;
+schema v10; 117 unit + 18 e2e tests green.*
 
 ## What works
 
@@ -127,6 +129,17 @@ living bases, in-game help, ambient music, strategic intel). Schema v10; 117 uni
 - Always-available alternative: the single-file build published as a claude.ai Artifact
   (https://claude.ai/artifact/7qGUMq5vWjnaNKRHEyempW); `npm run build:artifact` rebuilds it.
 - Handoff for other agents (Codex): [AGENTS.md](AGENTS.md) and [HANDOFF.md](HANDOFF.md).
+
+## Handoff notes (for the next agent)
+
+- A second scripted bug hunt over the campaign simulation was interrupted before it reported. Worth redoing:
+  an invariant checker over several seeds for 40–60 days (no negative stocks or NaN, every army has units,
+  every homeBaseId / toBaseId / toArmyId / standing transfer / intel record points at a valid entity, unit ids
+  unique across armies and garrisons) plus a JSON save → load → continue determinism check. Keeping such a
+  checker in `scripts/` (e.g. `npm run sim:invariants`) would make it reusable.
+- Cosmetic: on small phones (667×375) map labels of forces near the left edge can slide under the left
+  button column.
+- Everything else known is listed below; nothing is half-done in the code.
 
 ## Known issues / limitations
 

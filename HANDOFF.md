@@ -40,9 +40,10 @@ is in the repo.
 Task for this session: the next item from "Best next tasks" in CURRENT_STATE.md.
 ```
 
-Replace the last line with a concrete task when you have one (for example: "Intel: alert me when enemy
-forces come into view and show what an enemy base holds", "Escorts and repeatable supply runs",
-"Infantry can capture enemy buildings in battle", "Move the battle simulation into a Web Worker").
+Replace the last line with a concrete task when you have one (for example: "Add a headless invariant
+checker (npm run sim:invariants) and fix what it finds", "Convoy and supply-run escorts", "Infantry can
+re-crew silenced bunkers and AT guns", "Base specialisation", or feedback from play-testing on a phone).
+Read "Handoff notes" in CURRENT_STATE.md first.
 
 ## Open decision
 
